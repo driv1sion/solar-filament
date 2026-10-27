@@ -42,13 +42,13 @@ docs/
 * **Pure CNN Tri-Backbone Diversity Ensemble:** 69.7M parameters with mathematical proof of why Logit-Space linear blending outperforms post-sigmoid probability averaging.
 * **12-View Zoom TTA Pyramid:** Scale magnification $[1.0, 1.125, 1.25] \times 4\text{ flips}$ (36 total passes).
 * **Physics-Informed Post-Processing Engine:** Station-calibrated thresholding, curvilinear dilation grouping ($r = 10\text{px}$), TAC-SR v2 extremity recovery ($p_{25} \le 2.0\text{px}$), solar-physics morphometric pruning, and 3-pixel tube Collinear Endpoint Gap Bridging (CGB).
-* **Strict Two-Pass Physical Density Calibration:** Eliminating $\sim 210$ excess noise candidates to match physical ground-truth density ($5.50\text{ fil/img}$).
+* **Strict Two-Pass Physical Density Calibration:** Eliminating 415 excess noise candidates (pruning from raw 1,405 down to 990 instances) to match physical ground-truth density ($5.50\text{ fil/img}$).
 
 ---
 
 ### [Part 4: Model Limitations, Failure Modes & Future Research Directions](file:///Users/sadhumitha/Documents/projects/solar-filament/docs/04_limitations_and_future_directions.md)
 * **Metric Bottlenecks:** Analysis of why Recognition Quality ($\text{RQ} = 0.6455$) lags behind Segmentation Quality ($\text{SQ} = 0.6732$).
-* **Observatory Disparity:** Environmental breakdown of why Cerro Tololo (`Ch`: $0.3906\text{ PQ}$) suffers from optical gain degradation compared to Teide (`Th`: $0.4460\text{ PQ}$).
+* **Observatory Disparity:** Environmental breakdown of why Cerro Tololo (`Ch`: $0.3903\text{ PQ}$) suffers from optical gain degradation compared to Learmonth (`Lh`: $0.4577\text{ PQ}$) and Udaipur (`Uh`: $0.4518\text{ PQ}$).
 * **Persistent Failure Modes:** Active region over-merging, thin barb erosion on thick bodies, solar limb darkening distortion, and atmospheric seeing turbulence.
 * **Forensic Analysis of the Val (0.4346) vs. Public Leaderboard (0.37) Delta:** Detailed decomposition showing how the $\text{IoU} > 0.50$ cliff effect, test ground-truth consensus binarization strictness, and observatory distribution shifts account for the score difference.
 * **Future Research Roadmap:** Linear-complexity State-Space Models (Vision Mamba / VMamba / SegMamba) for native $2048 \times 2048$ processing; multi-modal physics fusion with SDO/HMI line-of-sight magnetograms ($B_{\text{LOS}}$); curvilinear query-based Panoptic Transformers (Mask2Former); and spatio-temporal video modeling.

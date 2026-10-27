@@ -37,7 +37,7 @@ $$\text{PQ} = \text{SQ} \times \text{RQ} = 0.6732 \times 0.6455 = 0.4346$$
 ---
 
 ### 2.2 Observatory Performance Disparity (GONG Network Breakdown)
-From our station-by-station validation analysis ([`results/per_observatory.csv`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/per_observatory.csv)):
+From our station-by-station validation analysis ([`results/per_observatory.csv`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/per_observatory.csv)) and visual summary ([`results/taxonomy_and_observatory_analysis.png`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/taxonomy_and_observatory_analysis.png)):
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -45,18 +45,18 @@ From our station-by-station validation analysis ([`results/per_observatory.csv`]
 +-------------+----------+--------+--------+--------+-----------+-----------------------------------+
 | Observatory | N_Images |   PQ   |   SQ   |   RQ   | Mean Dice | Environmental Diagnosis           |
 +-------------+----------+--------+--------+--------+-----------+-----------------------------------+
-| Th (Teide)  |    12    | 0.4460 | 0.6782 | 0.6577 |  0.7482   | Pristine mountain seeing, sharp.  |
-| Lh (Learm.) |    10    | 0.4432 | 0.6586 | 0.6730 |  0.6519   | High thermal turbulence, blurred. |
-| Bh (Big B.) |     9    | 0.4392 | 0.6735 | 0.6522 |  0.6500   | Lake seeing, good contrast.       |
-| Mh (Mauna)  |    12    | 0.4349 | 0.6654 | 0.6537 |  0.6796   | High volcanic peak, sharp.        |
-| Uh (Udaip.) |    15    | 0.4281 | 0.6633 | 0.6455 |  0.7041   | Island site, moderate haze.       |
-| Ch (Cerro)  |     9    | 0.3906 | 0.6498 | 0.6012 |  0.6146   | 15% sensor gain drop; severe lag! |
+| Lh (Learm.) |    10    | 0.4577 | 0.6716 | 0.6816 |  0.6580   | Peak RQ (0.6816); high detection  |
+| Uh (Udaip.) |    15    | 0.4518 | 0.6635 | 0.6810 |  0.7014   | Robust island seeing; sharp edges |
+| Bh (Big B.) |     9    | 0.4377 | 0.6890 | 0.6353 |  0.6483   | Lake seeing; highest SQ (0.6890)  |
+| Mh (Mauna)  |    12    | 0.4337 | 0.6684 | 0.6489 |  0.6895   | Volcanic peak; consistent quality |
+| Th (Teide)  |    12    | 0.4179 | 0.6785 | 0.6159 |  0.7174   | High altitude; peak Dice (0.7174) |
+| Ch (Cerro)  |     9    | 0.3903 | 0.6664 | 0.5856 |  0.5872   | 15% sensor gain drop; severe lag! |
 +-------------+----------+--------+--------+--------+-----------+-----------------------------------+
 ```
 
-#### Why Does Cerro Tololo (`Ch`) Severely Lag Behind ($0.3906$ vs. $0.4460$)?
-1. **Hardware Optical Gain Degradation:** On `Ch`, the telescope's optical throughput or sensor gain is approximately $15\%$ lower than on `Th`. Chromospheric absorption signatures that reach $0.85$ probability on Teide only reach $0.55\text{--}0.65$ on Cerro Tololo.
-2. **Boundary Signal Erasure:** Fine extremity barbs have absorption values hovering near $0.28\text{--}0.34$, barely above chromospheric background noise. Even with our adaptive delta ($\tau_{\text{eff}} = 0.51$) and lower gap threshold ($0.09$), faint barbs are frequently truncated, dropping Recognition Quality on `Ch` to an unsatisfactory $0.6012$.
+#### Why Does Cerro Tololo (`Ch`) Severely Lag Behind ($0.3903$ vs. $0.4577$)?
+1. **Hardware Optical Gain Degradation:** On `Ch`, the telescope's optical throughput or sensor gain is approximately $15\%$ lower than on other stations. Chromospheric absorption signatures that reach $0.85$ probability on Learmonth/Teide only reach $0.55\text{--}0.65$ on Cerro Tololo.
+2. **Boundary Signal Erasure:** Fine extremity barbs have absorption values hovering near $0.28\text{--}0.34$, barely above chromospheric background noise. Even with our adaptive delta ($\tau_{\text{eff}} = 0.51$) and lower gap threshold ($0.09$), faint barbs are frequently truncated, dropping Recognition Quality on `Ch` to an unsatisfactory $0.5856$ and Mean Dice to $0.5872$.
 
 ---
 

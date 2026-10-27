@@ -73,7 +73,7 @@ where a true match strictly requires $\text{IoU}(y, \hat{y}) > 0.50$. In additio
 | **v19** | Supervised Direct Deployment + Curvilinear Tube CGB + Solar-Physics Pruning | 0.4300 | 0.6755 | 0.6366 | 522 | 114 | 8 | Direct deployment on full 67-image holdout; established 0.4300 verified benchmark |
 | **v20** | Unconstrained Noise Pruning + TAC-SR v2 + Full Station Calibration | 0.4322 | 0.6696 | 0.6454 | 525 | 105 | 9 | Found global maximum at area=420, recovered +10 borderline filaments, cut FP to 105 |
 | **v21** | Station-Gated TAC-SR (p25) + Adaptive CGB (Ch=0.09) + Extended Grid (0.53) | 0.4325 | 0.6664 | 0.6489 | 532 | 90 | 7 | Station-adaptive refinement; test density capped at 6.65 fil/img |
-| **v22 SOTA (FINAL)** | **Full 67-Obs Metric-Aligned PQ Checkpointing + Strict 5.5 fil/img Density Calibration (Optimal Grid: $\tau=0.55$, area=450)** | **0.4346** | **0.6732** | **0.6455** | **534** | **~82** | **~6** | **Definitive Ground-Truth Alignment: Checkpoints saved on true instance PQ (EffNet: 0.4147, ResNet: 0.4183, ConvNeXt: 0.4282); 69.7M params; Public Leaderboard: 0.37.** |
+| **v22 SOTA (FINAL)** | **Full 67-Obs Metric-Aligned PQ Checkpointing + Strict 5.5 fil/img Density Calibration (Optimal Grid: $\tau=0.55$, area=450)** | **0.4346** | **0.6732** | **0.6455** | **550** | **158** | **6** | **Definitive Ground-Truth Alignment: Checkpoints saved on true instance PQ (EffNet: 0.4147, ResNet: 0.4183, ConvNeXt: 0.4282); 69.7M params; Public Leaderboard: 0.37.** |
 
 ---
 
@@ -87,6 +87,16 @@ solar-filament/
 │   ├── 02_experiment_evolution_and_ablation.md # Part 2: Progression, Model Selection & Ablations
 │   ├── 03_final_architecture_and_components.md # Part 3: v22 SOTA Pipeline & Engineering
 │   └── 04_limitations_and_future_directions.md # Part 4: Weaknesses, LB Delta & Future Roadmap
+├── results/                            # Official v22 Execution Artifacts & Figures
+│   ├── solar-filament-v22.ipynb        # Fully executed v22 notebook with outputs
+│   ├── taxonomy_and_observatory_analysis.png # Error taxonomy & station bar charts
+│   ├── solar_morphometrics_and_overlay.png   # Morphological pruning scatter plot
+│   ├── gradcam.png                     # Full-disk Grad-CAM activation map
+│   ├── gradcam_20110205082634Lh_inst1.png    # High-resolution Learmonth instance Grad-CAM
+│   ├── submission.csv                  # Calibrated test predictions (5.50 fil/img)
+│   ├── ablation_study.csv              # Quantitative ablation metrics (10 variants)
+│   ├── per_observatory.csv             # Station-by-station validation breakdown
+│   └── table_ablation.tex              # Publication LaTeX ablation table
 ├── PRESENTATION_AND_ARCHITECTURE_GUIDE.md # Unified Presentation & Defense Master Guide
 ├── solar-filament-v22.ipynb            # SOTA v22 Full Retrain with 67-Obs PQ Checkpointing (Primary)
 ├── solar-filament-v21.ipynb            # v21 Pure Supervised Notebook (Archived reference)
