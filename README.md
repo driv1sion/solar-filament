@@ -81,6 +81,13 @@ where a true match strictly requires $\text{IoU}(y, \hat{y}) > 0.50$. In additio
 
 ```
 solar-filament/
+├── docs/                               # Modular Deep-Dive Presentation & Engineering Guides
+│   ├── README.md                       # Master Documentation Sitemap & Quick Reference
+│   ├── 01_problem_dataset_and_metrics.md # Part 1: Physics Domain, GONG & Panoptic Quality
+│   ├── 02_experiment_evolution_and_ablation.md # Part 2: Progression, Model Selection & Ablations
+│   ├── 03_final_architecture_and_components.md # Part 3: v22 SOTA Pipeline & Engineering
+│   └── 04_limitations_and_future_directions.md # Part 4: Weaknesses, LB Delta & Future Roadmap
+├── PRESENTATION_AND_ARCHITECTURE_GUIDE.md # Unified Presentation & Defense Master Guide
 ├── solar-filament-v22.ipynb            # SOTA v22 Full Retrain with 67-Obs PQ Checkpointing (Primary)
 ├── solar-filament-v21.ipynb            # v21 Pure Supervised Notebook (Archived reference)
 ├── solar-filament-v20.ipynb            # v20 Supervised Benchmark Notebook (0.4322 Holdout Reference)
@@ -92,7 +99,7 @@ solar-filament/
 ├── requirements.txt                    # Exact package dependencies
 ├── submission.csv                      # Competition submission file
 ├── table_ablation.tex                  # Complete LaTeX ablation table for IEEE BigData report
-├── ablation_study.csv                  # Quantitative ablation metrics across 9 variants
+├── ablation_study.csv                  # Quantitative ablation metrics across 10 variants
 ├── per_observatory.csv                 # Station-by-station validation breakdown across GONG sites
 ├── best.pt                             # Model 1 weights: timm-efficientnet-b3 (53.2 MB)
 ├── best_resnet34.pt                    # Model 2 weights: resnet34 (97.9 MB)
