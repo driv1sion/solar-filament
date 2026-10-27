@@ -36,13 +36,14 @@ docs/
 ---
 
 ### [Part 3: Final Architecture, Engineering Design & Pipeline Components](file:///Users/sadhumitha/Documents/projects/solar-filament/docs/03_final_architecture_and_components.md)
-* **End-to-End Visual Architecture:** Comprehensive Mermaid diagrams detailing data flow from raw observation to competition submission.
-* **Curvilinear-Guided Training Sampling:** $70\%$ positive filament-centered sampling $+ 30\%$ unconstrained background sampling on native 1:1 scale $768 \times 768$ crops.
+* **End-to-End Visual Architecture:** Clean, modular Mermaid flowchart detailing data flow from raw observation to competition submission.
+* **Solar Ingestion & Pre-Processing:** Raw physical absorption preservation (why CLAHE/ASCE failed), synthetic 3-channel replication for ImageNet backbones, soft consensus target generation, and station metadata parsing.
+* **Curvilinear-Guided Training Sampling:** $70\%$ positive filament-centered sampling $+ 30\%$ unconstrained background sampling on native 1:1 scale $768 \times 768$ crops with $D_4$ symmetry augmentations.
 * **Curvilinear Compound Boundary Loss:** Continuous Soft-Dice ($0.35$), Lovasz-Hinge submodular Jaccard surrogate ($0.40$), and Binary Cross-Entropy ($0.25$) with mathematical proofs.
-* **Pure CNN Tri-Backbone Diversity Ensemble:** 69.7M parameters with mathematical proof of why Logit-Space linear blending outperforms post-sigmoid probability averaging.
+* **Pure CNN Tri-Backbone Diversity Ensemble:** 69.7M parameters with deep rationale for Sigmoid output activation vs. Softmax/Tanh, and mathematical proof of why Logit-Space linear blending outperforms post-sigmoid probability averaging.
 * **12-View Zoom TTA Pyramid:** Scale magnification $[1.0, 1.125, 1.25] \times 4\text{ flips}$ (36 total passes).
-* **Physics-Informed Post-Processing Engine:** Station-calibrated thresholding, curvilinear dilation grouping ($r = 10\text{px}$), TAC-SR v2 extremity recovery ($p_{25} \le 2.0\text{px}$), solar-physics morphometric pruning, and 3-pixel tube Collinear Endpoint Gap Bridging (CGB).
-* **Strict Two-Pass Physical Density Calibration:** Eliminating 415 excess noise candidates (pruning from raw 1,405 down to 990 instances) to match physical ground-truth density ($5.50\text{ fil/img}$).
+* **Physics-Informed Post-Processing Engine:** Station-calibrated thresholding, curvilinear dilation grouping ($r = 10\text{px}$), TAC-SR v2 extremity recovery ($P_{25} \le 2.0\text{px}$), solar-physics morphometric pruning, and 3-pixel tube Collinear Endpoint Gap Bridging (CGB).
+* **Embedded Component Decision Matrices:** Every section directly integrates a structured "Choices vs. Alternatives" decision matrix detailing why each technical choice was selected over competing alternatives.
 
 ---
 

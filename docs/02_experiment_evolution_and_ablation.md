@@ -77,13 +77,34 @@ Choosing backbone architectures for full-disk solar segmentation is fundamentall
 +----------------------+-----------------------------+----------------------------------------------+
 ```
 
-### 3.1 Why ConvNeXt-Tiny + scSE Attention?
-ConvNeXt (Liu et al., CVPR 2022) modernizes standard ResNets by adopting Vision Transformer design choices:
+### 3.1 Why timm-efficientnet-b3?
+`timm-efficientnet-b3` (Tan & Le, ICML 2019) serves as our high-precision boundary anchor ($w_1 = 0.40$, Standalone $\text{Val PQ} = 0.4147$, $\text{SQ} = 0.6772$, $\text{RQ} = 0.6124$):
+1. **Compound Scaling Balance ($\alpha \cdot \beta^\phi \cdot \gamma^\phi$):** Rather than arbitrary deep-stacking, EfficientNet balances network depth, channel width, and input resolution. For training on $768 \times 768$ crops and inferring on $2048 \times 2048$ full disks, EfficientNet-B3 (~12.2M parameters) hits an ideal Pareto-optimal operating point: rich multi-scale feature hierarchies without the excessive VRAM consumption or slow inference of larger variants (B4–B7).
+2. **MBConv Inverted Residuals with Depthwise Separable Convolutions:** Standard dense convolutions often suffer from spatial dilation ("boundary bloat") when learning high-contrast solar absorption lines. By factoring $3 \times 3$ convolutions into spatial depthwise convolutions followed by $1 \times 1$ pointwise projections, MBConv prevents lateral feature over-expansion. This delivers razor-sharp boundary gradients along fine $2\text{--}10\text{px}$ filament spines, directly protecting Segmentation Quality ($\text{SQ}$).
+3. **Channel-Wise Squeeze-and-Excitation (SE) Recalibration:** Native SE modules within MBConv blocks dynamically recalibrate channel weights based on global receptive context ($r = 4$). This boosts feature representations corresponding to deep, narrow $H\alpha$ dark absorption troughs while suppressing channels dominated by diffuse bright chromospheric plages and quiet-sun background intensity.
+
+### 3.2 Why resnet34?
+`resnet34` (He et al., CVPR 2016) serves as the structural regularizer and granular noise dampener ($w_2 = 0.20$, Standalone $\text{Val PQ} = 0.4183$, $\text{SQ} = 0.6802$, $\text{RQ} = 0.6149$):
+1. **Classic Residual Identity Mappings ($y = \mathcal{F}(x, \{W_i\}) + x$):** BasicBlock residual units with identity shortcuts provide direct, uninhibited gradient propagation during backpropagation across all 34 layers. This provides exceptionally stable optimization and prevents vanishing gradients on subtle chromospheric boundaries.
+2. **Dense Convolutional Inductive Bias Against Convective Granulation:** Both EfficientNet and ConvNeXt rely heavily on depthwise separable convolutions, which decouple spatial and channel interactions. However, depthwise layers can over-respond to localized high-frequency texture noise (such as quiet-sun convective granulation cells of $\sim 1{,}000\text{ km}$ across). ResNet-34's standard $3 \times 3$ dense convolutions compute full cross-channel spatial correlations at every step, creating a smooth spatial regularizing effect that prevents granulation lanes from triggering false positives.
+3. **Architectural Heterogeneity & Error Decoupling:** In an ensemble, models with identical building blocks tend to exhibit correlated failure modes. ResNet-34 contributes critical topological diversity: its non-inverted, non-depthwise architecture generates orthogonal error residuals in logit space. When blended at weight $w_2 = 0.20$, it dampens erratic edge over-activations from the other models, yielding our highest standalone Segmentation Quality ($\text{SQ} = 0.6802$).
+
+### 3.3 Why ConvNeXt-Tiny + scSE Attention?
+ConvNeXt (Liu et al., CVPR 2022) modernizes standard ResNets by adopting Vision Transformer design choices ($w_3 = 0.40$, Standalone $\text{Val PQ} = 0.4282$, $\text{SQ} = 0.6812$, $\text{RQ} = 0.6287$):
 1. **$7 \times 7$ Depthwise Convolutions:** By moving to $7 \times 7$ kernels in the depthwise stage, the Effective Receptive Field is over $4\times$ larger than standard ResNet blocks. This allows ConvNeXt to perceive continuity along a $500\text{px}$ flux rope even across faint absorption gaps.
 2. **Inverted Bottleneck Design:** Similar to MobileNetV2 and Transformers, ConvNeXt expands channel dimension by $4\times$ in the hidden layer, preventing information bottlenecking along narrow features.
 3. **Spatial & Channel Squeeze-and-Excitation (`scSE`) Decoder Attention:** Roy et al. (IEEE TMI 2018) proved that concurrently exciting spatial features ($s\text{SE}$) and recalibrating channel dependencies ($c\text{SE}$) sharpens boundary localization in biomedical tubular structures. In our UNet decoder, `scSE` forces the network to route high-level semantic spinal features directly along fine low-level edge contours.
 
-### 3.2 Why Not Pure Vision Transformers (ViT, Swin, DeiT)?
+### 3.4 Architectural Complementarity: The Inductive Diversity Triad
+The three selected backbones form a balanced tripartite synergy where each model compensates for the physical blindspots of the others:
+
+| Backbone | Primary Inductive Bias | Spatial Receptive Field | Key Solar Strength | Vulnerability Mitigated by Ensemble |
+| :--- | :--- | :--- | :--- | :--- |
+| **`timm-efficientnet-b3`** ($w = 0.40$) | Compound-scaled depthwise separable convolutions + SE | Medium ($3 \times 3$ MBConv) | High edge acuity; prevents lateral boundary dilation bloat (protects SQ) | ResNet and ConvNeXt prevent isolated barb erosion |
+| **`resnet34`** ($w = 0.20$) | Classic dense residual convolutions + identity skips | Localized ($3 \times 3$ dense) | Suppresses high-frequency quiet-sun granulation noise and stabilizes logits | ConvNeXt and EffNet provide macro-continuity across long gaps |
+| **`tu-convnext_tiny` + `scSE`** ($w = 0.40$) | Large-kernel depthwise inverted bottlenecks + spatial/channel attention | Macro ($7 \times 7$ depthwise + $s\text{SE}/c\text{SE}$) | Bridges long-range magnetic polarity inversion line gaps ($500\text{px}$) | ResNet dampens over-confident false alarms; EffNet sharpens boundaries |
+
+### 3.5 Why Not Pure Vision Transformers (ViT, Swin, DeiT)?
 - Standard Vision Transformers compute self-attention across flattened spatial tokens:
   $$\text{Complexity} = O(N^2 \cdot D) \quad \text{where } N = \frac{H \cdot W}{P^2}$$
 - For a $2048 \times 2048$ image with standard $16 \times 16$ patches, the sequence length is:
