@@ -277,39 +277,83 @@ The diagram below illustrates the complete data flow from raw $2048 \times 2048$
 
 ```mermaid
 flowchart TD
-    A["Raw GONG H-alpha Image<br/>(2048 x 2048, 1-channel uint8)"] --> B["Observation Day & Station Parser<br/>(Extracts YYYYMMDD and Station ID: Bh, Ch, Lh, Mh, Th, Uh)"]
-    
-    subgraph SOTA_Ensemble ["12-View Zoom TTA Tri-Backbone Ensemble (69.7M Params)"]
-        B --> C1["Scale 1.0 (2048x2048)<br/>4 Orthogonal Flips"]
-        B --> C2["Scale 1.125 (2304x2304)<br/>4 Orthogonal Flips"]
-        B --> C3["Scale 1.25 (2560x2560)<br/>4 Orthogonal Flips"]
+    %% Global Styling
+    classDef ioNode fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef stageNode fill:#0f172a,stroke:#64748b,stroke-width:1.5px,color:#f1f5f9;
+    classDef modelNode fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#e0e7ff;
+    classDef postNode fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5;
+    classDef calibNode fill:#431407,stroke:#fb923c,stroke-width:2px,color:#fff7ed;
+
+    RawIn["<b>Raw GONG H-alpha Frame</b><br/>• Shape: [2048 x 2048, 1-ch uint8/uint16]<br/>• Bandwidth: 656.28 nm<br/>• Metadata: Station ID (Bh, Ch, Lh, Mh, Th, Uh) & Date"]:::ioNode
+
+    PreProc["<b>Preprocessing & Normalization</b><br/>• Z-Score Standardization: (I - mu) / (sigma + 1e-6)<br/>• 3-Channel Synthetic Replication: [3, 2048, 2048]<br/>• Zero Blur: No resizing, no CLAHE/ASCE high-pass filters"]:::stageNode
+
+    RawIn --> PreProc
+
+    subgraph SOTA_Ensemble ["12-View Zoom TTA Tri-Backbone Diversity Ensemble (69,727,884 Params)"]
+        direction TB
         
-        C1 & C2 & C3 --> D1["Model 1: EfficientNet-B3<br/>Best Val PQ: 0.4147"]
-        C1 & C2 & C3 --> D2["Model 2: ResNet-34<br/>Best Val PQ: 0.4183"]
-        C1 & C2 & C3 --> D3["Model 3: ConvNeXt-Tiny + scSE<br/>Best Val PQ: 0.4282"]
-        
-        D1 -- "Logit Weight: 0.40" --> E["Logit-Space Precision Fusion<br/>L_ens = 0.40*L1 + 0.20*L2 + 0.40*L3"]
-        D2 -- "Logit Weight: 0.20" --> E
-        D3 -- "Logit Weight: 0.40" --> E
-        E --> F["Sigmoid Activation<br/>P_prob = sigmoid(L_ens)"]
+        subgraph TTA_Gen ["Multi-Scale Zoom & Flip Generator (12 Views)"]
+            direction LR
+            C1["<b>Scale 1.000x</b><br/>• [3, 2048, 2048]<br/>• 4 Dihedral Flips"]:::stageNode
+            C2["<b>Scale 1.125x</b><br/>• [3, 2304, 2304]<br/>• 4 Dihedral Flips"]:::stageNode
+            C3["<b>Scale 1.250x</b><br/>• [3, 2560, 2560]<br/>• 4 Dihedral Flips"]:::stageNode
+        end
+
+        PreProc --> C1 & C2 & C3
+
+        subgraph Model_Inference ["Parallel Deep Backbone Evaluation (36 Forward Passes)"]
+            direction LR
+            D1["<b>Model 1: timm-efficientnet-b3</b><br/>• Params: 12.2M | Input: [3, H_s, W_s]<br/>• Role: Sharp 2px Spine Boundary Anchor<br/>• Best Val PQ: 0.4147"]:::modelNode
+            D2["<b>Model 2: resnet34</b><br/>• Params: 24.4M | Input: [3, H_s, W_s]<br/>• Role: Quiet-Sun Texture Regularizer<br/>• Best Val PQ: 0.4183"]:::modelNode
+            D3["<b>Model 3: tu-convnext_tiny + scSE</b><br/>• Params: 33.1M | Input: [3, H_s, W_s]<br/>• Role: 7x7 Large Kernel Macro-Continuity<br/>• Best Val PQ: 0.4282"]:::modelNode
+        end
+
+        C1 & C2 & C3 --> D1 & D2 & D3
+
+        Fusion["<b>Logit-Space Linear Fusion & Projection</b><br/>• Unflip & Resample all 36 passes back to [1, 2048, 2048]<br/>• Calibrated Weights: L_ens = 0.40*Z_EffNet + 0.20*Z_ResNet + 0.40*Z_ConvNeXt<br/>• Sigmoid Mapping: P_ens(x, y) = 1 / (1 + exp(-L_ens)) in [0.0, 1.0]"]:::stageNode
+
+        D1 -- "Weight: w1 = 0.40" --> Fusion
+        D2 -- "Weight: w2 = 0.20" --> Fusion
+        D3 -- "Weight: w3 = 0.40" --> Fusion
     end
 
-    subgraph Post_Processing ["v22 High-Precision Post-Processing Engine"]
-        F --> G["Station-Specific Thresholding<br/>Base: tau=0.55 | Ch, Bh, Lh: tau=0.51"]
-        G --> H["Curvilinear Dilation Grouping<br/>(Ellipse Kernel, radius=10px)"]
-        H --> I["Connected Components Labeling & Mask Re-Multiplication"]
-        I --> J["TAC-SR v2: Tapering-Aware Spine Recovery<br/>(p25 <= 2.0px & Station Gating locked at 0.35)"]
-        J --> K["Solar Physics Morphometric Pruning<br/>Prune if: Solidity > 0.76 & AR < 1.75 & p90 < 0.62"]
-        K --> L["Curvilinear 3-Pixel Tube CGB<br/>Collinear Endpoint Gap Bridging<br/>(eff_bridge_thr = 0.09 for Ch, 0.15 for others)"]
+    subgraph Post_Processing ["Physics-Informed Morphometric Post-Processing Engine"]
+        direction TB
+        G["<b>1. Station-Adaptive Thresholding</b><br/>• Mh, Th, Uh (Clear seeing): tau = 0.55<br/>• Bh, Ch, Lh (Turbulent seeing): tau = 0.51"]:::postNode
+
+        H["<b>2. Curvilinear Grouping & Zero-Bloat Re-Multiplication</b><br/>• Elliptical Dilation (r = 10px): B_group = dilate(B, E_10)<br/>• Connected Components: C_group = CC8(B_group)<br/>• Output Mask: C_final = C_group * B (Zero lateral bloat)"]:::postNode
+
+        J["<b>3. TAC-SR v2: Tapering-Aware Spine Recovery</b><br/>• Euclidean Distance Transform: dist(x,y)<br/>• Thin Barb Gate: p25(dist) &le; 2.0px OR median(dist) &le; 2.5px<br/>• Recover Boundary Pixels with P_ens &ge; 0.35 (Thick cores locked)"]:::postNode
+
+        K["<b>4. Solar-Physics Morphometric Pruning</b><br/>• Measure: Aspect Ratio AR, Solidity, Core Intensity P90<br/>• Prune Circular Noise: (Solidity &gt; 0.76 & AR &lt; 1.75 & P90 &lt; 0.62)<br/>  OR (AR &lt; 1.80 & Solidity &gt; 0.82)"]:::postNode
+
+        L["<b>5. Collinear 3-Pixel Tube Gap Bridging (CGB)</b><br/>• Search Candidate Endpoints within Euclidean Gap &le; 35px<br/>• Collinearity Criterion: |v1 . v2| &ge; 0.906 & |v1 . u_disp| &ge; 0.70<br/>• Threshold: Tube Line Integral &ge; 0.15 (Ch: 0.09)"]:::postNode
+
+        G --> H --> J --> K --> L
     end
 
-    subgraph Density_Calibration ["Strict 5.5 fil/img Test Density Calibration"]
-        L --> M["Pass 1: Per-Image Outlier Capping<br/>(Prune faint instances with mean_prob < 0.58 in frames with >10 instances)"]
-        M --> N["Pass 2: Global Confidence Calibration<br/>(Prune lowest mean_prob instances to cap global density at 5.50 fil/img)"]
+    Fusion --> G
+
+    subgraph Density_Calibration ["Two-Pass Physical Density Calibration (GONG Benchmark Ground-Truth)"]
+        direction TB
+        M["<b>Pass 1: Per-Frame Outlier Suppression</b><br/>• If Instances in Frame &gt; 10:<br/>  Prune faint candidates: mean_prob &lt; 0.58 & Area &lt; 650px"]:::calibNode
+
+        N["<b>Pass 2: Global Solar Density Ceiling</b><br/>• Lock Global Test Target to Consensus: 5.50 filaments/image<br/>• Rank test candidates by ensemble probability; retain top 990 instances"]:::calibNode
+
+        M --> N
     end
 
-    N --> O["COCO UTF-8 RLE Encoder"]
-    O --> P["Final Competition submission.csv<br/>(~5.5 filaments/image | Public LB: 0.37)"]
+    L --> M
+
+    subgraph Final_Output ["Competition Submission Delivery"]
+        direction TB
+        O["<b>COCO UTF-8 RLE Bitmask Encoding</b><br/>• pycocotools mask compression"]:::ioNode
+        P["<b>Submission: submission.csv</b><br/>• 180 Test Images | ~990 Filaments (~5.5 fil/img)<br/>• Verified Peak Val PQ: 0.4346 | Kaggle Public LB: 0.37"]:::ioNode
+        O --> P
+    end
+
+    N --> O
 ```
 
 ---
@@ -323,20 +367,20 @@ flowchart TD
     StCheck -- "Mh, Th, Uh (High Contrast)" --> T1["eff_thr = 0.55<br/>eff_min_area = 450px<br/>tac_pos_gate = 0.35"]
     StCheck -- "Bh, Ch, Lh (Seeing Degraded)" --> T2["eff_thr = 0.51<br/>eff_min_area = 420px<br/>tac_pos_gate = 0.35"]
 
-    T1 & T2 --> Binarize["Binary Segmentation Map<br/>b = (prob >= eff_thr)"]
+    T1 & T2 --> Binarize["Binary Segmentation Map<br/>b = (prob &ge; eff_thr)"]
     Binarize --> Dilate["Curvilinear Grouping Dilation<br/>grp = dilate(b, r=10)"]
     Dilate --> CC["Connected Components: cc = cc(grp) * b"]
     
-    CC --> DistTrans["Distance Transform on Components<br/>dist = cv2.distanceTransform(cc > 0)"]
-    DistTrans --> TaperCheck{"Tapering Extremity Test<br/>p25(dist) <= 2.0px OR median(dist) <= 2.5px?"}
-    TaperCheck -- "Yes (Thin Spine / Tapering Barb)" --> Recover["Recover Boundary Pixels<br/>where prob >= 0.35"]
+    CC --> DistTrans["Distance Transform on Components<br/>dist = cv2.distanceTransform(cc &gt; 0)"]
+    DistTrans --> TaperCheck{"Tapering Extremity Test<br/>p25(dist) &le; 2.0px OR median(dist) &le; 2.5px?"}
+    TaperCheck -- "Yes (Thin Spine / Tapering Barb)" --> Recover["Recover Boundary Pixels<br/>where prob &ge; 0.35"]
     TaperCheck -- "No (Thick Active Region / Sunspot)" --> NoRecover["Keep Existing Boundaries<br/>(Zero Dilation Bloat)"]
     
-    Recover & NoRecover --> PhysFilter{"Solar Physics Filter<br/>Solidity > 0.76 AND Aspect Ratio < 1.75<br/>AND 90th% Intensity < 0.62?"}
+    Recover & NoRecover --> PhysFilter{"Solar Physics Filter<br/>Solidity &gt; 0.76 AND Aspect Ratio &lt; 1.75<br/>AND 90th% Intensity &lt; 0.62?"}
     PhysFilter -- "True (Circular Noise / Sunspot)" --> Drop["PRUNE (Discard False Positive)"]
     PhysFilter -- "False (Genuine Ribbon Filament)" --> Keep["KEEP (Valid Filament Instance)"]
     
-    Keep --> CGB{"Gap Distance <= 35px<br/>AND Axis Collinearity >= 0.70<br/>AND Tube Line Integral >= eff_bridge_thr?"}
+    Keep --> CGB{"Gap Distance &le; 35px<br/>AND Axis Collinearity &ge; 0.70<br/>AND Tube Line Integral &ge; eff_bridge_thr?"}
     CGB -- "True (Single Magnetic Flux Rope)" --> Bridge["Draw Spline Bridge Along Neutral Line<br/>Union Component IDs"]
     CGB -- "False (Separate Filaments)" --> NoBridge["Preserve Disjoint Instance IDs"]
 ```

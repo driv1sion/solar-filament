@@ -261,7 +261,7 @@ The empirical error taxonomy distributions and per-observatory metric profiles w
   - Right panel illustrates the cross-station consistency where Learmonth (`Lh`, $0.4577\text{ PQ}$) and Udaipur (`Uh`, $0.4518\text{ PQ}$) outperform Cerro Tololo (`Ch`, $0.3903\text{ PQ}$).
 
 - **Solar Morphometrics & Pruning Boundary:** [`results/solar_morphometrics_and_overlay.png`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/solar_morphometrics_and_overlay.png)
-  - Displays the 2D morphometric scatter plot of **Aspect Ratio vs. Solidity**, illustrating how the threshold boundary ($\text{Solidity} > 0.76 \land \text{AR} < 1.75$) cleanly carves away rounded granulation noise blobs while preserving $100\%$ of thin curvilinear filaments.
+  - Displays the 2D morphometric scatter plot of **Aspect Ratio vs. Solidity**, illustrating how the threshold boundary ($\text{Solidity} > 0.76 \ \wedge \ \text{AR} < 1.75$) cleanly carves away rounded granulation noise blobs while preserving $100\%$ of thin curvilinear filaments.
 
 ---
 

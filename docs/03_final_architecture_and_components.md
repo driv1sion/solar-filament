@@ -10,39 +10,94 @@ The entire architecture is designed to optimize the non-differentiable **Panopti
 
 ```mermaid
 flowchart TD
-    Raw["Raw GONG H-alpha Observation<br/>(2048 x 2048, single-channel uint8/uint16)"] --> Pre["Component 1: Ingestion & Pre-Processing<br/>- Preserves raw physical absorption gradients (No ASCE/CLAHE)<br/>- Synthetic 3-channel replication for ImageNet weights<br/>- Metadata extraction: Station ID (Bh, Ch, Lh, Mh, Th, Uh) & Date"]
-    
-    subgraph Offline_Training ["Component 2 & 3: Offline Model Training Engine (768 x 768 Native Crops)"]
-        Pre -. "Training Data" .-> CropGen["Curvilinear-Guided Crop Generator<br/>- 70% Positive Foreground Centered (+/-64px jitter)<br/>- 30% Unconstrained Quiet-Sun Background"]
-        CropGen --> Aug["Orthogonal Dihedral D4 Augmentations<br/>- 0, 90, 180, 270 deg rotations + horizontal/vertical flips<br/>- Excludes non-orthogonal shearing/elastic blur"]
-        Aug --> Models["Tri-Backbone Deep Training<br/>- timm-efficientnet-b3 (Compound MBConv)<br/>- resnet34 (Dense Residual Identity)<br/>- tu-convnext_tiny + scSE (7x7 Depthwise + Attention)"]
-        Models --> Loss["Curvilinear Compound Loss<br/>0.40 * Lovasz + 0.35 * SoftDice + 0.25 * BCE"]
-        Loss --> Checkpoint["True Instance PQ Metric Checkpointing<br/>Saves on holdout PQ, not validation loss"]
+    %% Global Styling
+    classDef ioNode fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef stageNode fill:#0f172a,stroke:#64748b,stroke-width:1.5px,color:#f1f5f9;
+    classDef modelNode fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#e0e7ff;
+    classDef lossNode fill:#450a0a,stroke:#f87171,stroke-width:2px,color:#fef2f2;
+    classDef postNode fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5;
+    classDef calibNode fill:#431407,stroke:#fb923c,stroke-width:2px,color:#fff7ed;
+
+    RawIn["<b>Raw GONG Observation</b><br/>• Shape: [2048 x 2048, 1-ch uint8/uint16]<br/>• Physical: H-alpha 656.28 nm<br/>• Stations: Bh, Ch, Lh, Mh, Th, Uh"]:::ioNode
+
+    subgraph C1 ["Component 1: Ingestion, Normalization & Metadata Parsing"]
+        PreProc["<b>Deterministic Normalization</b><br/>• Cast: float32 & Mean/Std z-score<br/>• Replicate: [1, 2048, 2048] &rarr; [3, 2048, 2048]<br/>• Station Meta: Extract site code & seeing tag"]:::stageNode
     end
 
-    subgraph Inference_Pipeline ["Component 4 & 5: 12-View Zoom TTA & Logit Fusion"]
-        Pre --> TTA["12-View Multi-Scale Zoom TTA Pyramid<br/>Scales: 1.0x, 1.125x, 1.25x<br/>4 Orthogonal Flips per scale (12 views per model)"]
-        Checkpoint -. "Deploy Best Checkpoints" .-> EnsBackbones["Tri-Backbone Diversity Ensemble (69.7M Params)<br/>Model 1: EffNet-B3 (w=0.40) | Model 2: ResNet34 (w=0.20)<br/>Model 3: ConvNeXt-Tiny + scSE (w=0.40)"]
-        TTA --> EnsBackbones
-        EnsBackbones --> LogitFusion["Logit-Space Linear Fusion<br/>L_ens = sum(w_m * z_m) across all 36 passes"]
-        LogitFusion --> Sigmoid["Sigmoid Probability Activation<br/>P_ens = 1 / (1 + exp(-L_ens))"]
+    RawIn --> PreProc
+
+    subgraph Offline_Training ["Components 2 & 3: Supervised Training Engine (768 x 768 Native Scale)"]
+        direction TB
+        CropGen["<b>Curvilinear-Guided Patch Sampler</b><br/>• Native Crop: [3, 768, 768] (Zero Interpolation)<br/>• Sampling: 70% Foreground / 30% Background<br/>• Batch: 2 imgs x 4 crops = 8 crops/step<br/>• Grad Accum: 2 steps (Effective Batch = 16)"]:::stageNode
+        
+        AugD4["<b>D4 Dihedral Symmetry Augmentations</b><br/>• Random Flips (p=0.5 H/V) + Rot90 (0, 90, 180, 270 deg)<br/>• Strict Exclusion: No elastic/affine blur"]:::stageNode
+        
+        M1_Tr["<b>EfficientNet-B3 UNet</b><br/>• Params: 12.2M<br/>• Loss: Lovasz+Dice+BCE"]:::modelNode
+        M2_Tr["<b>ResNet-34 UNet</b><br/>• Params: 24.4M<br/>• Loss: Lovasz+Dice+BCE"]:::modelNode
+        M3_Tr["<b>ConvNeXt-Tiny+scSE</b><br/>• Params: 33.1M<br/>• Loss: Lovasz+Dice+BCE"]:::modelNode
+
+        PQ_Check["<b>Full 67-Observation PQ Checkpointer</b><br/>• Zero-Latency: 67 observations preloaded in RAM<br/>• Checkpoint Criterion: Maximize Local Validation PQ<br/>• Weights Saved: best.pt, best_resnet34.pt, best_convnext_tiny.pt"]:::lossNode
+
+        CropGen --> AugD4
+        AugD4 --> M1_Tr & M2_Tr & M3_Tr
+        M1_Tr & M2_Tr & M3_Tr --> PQ_Check
     end
 
-    subgraph Post_Processing ["Component 6: Physics-Informed Morphometric Engine"]
-        Sigmoid --> CalibThresh["Station-Calibrated Binarization<br/>tau = 0.55 (Mh, Th, Uh) | tau = 0.51 (Bh, Ch, Lh)"]
-        CalibThresh --> Dilation["Curvilinear Dilation Grouping (r = 10px)<br/>& Component Re-Multiplication (Zero Bloat)"]
-        Dilation --> TAC["TAC-SR v2: Tapering-Aware Spine Recovery<br/>Isolates thin barbs: dist p25 <= 2.0px or median <= 2.5px<br/>Recovers boundary pixels where P_prob >= 0.35"]
-        TAC --> GeoFilter["Solar Physics Morphometric Filter<br/>Prunes circular noise: Solidity > 0.76, AR < 1.75, P90 < 0.62"]
-        GeoFilter --> CGB["Collinear 3-Pixel Tube Gap Bridging (CGB)<br/>Gap <= 35px, Collinearity >= 0.70, Line Integral Verified"]
+    PreProc -. "Training Set (640 Imgs)" .-> CropGen
+
+    subgraph Inference_Engine ["Components 4 & 5: 12-View Zoom TTA & Logit-Space Ensembling"]
+        direction TB
+        TTA_Pyramid["<b>12-View Zoom TTA Generator</b><br/>• Scale 1.000x: [3, 2048, 2048] (4 Flips)<br/>• Scale 1.125x: [3, 2304, 2304] (4 Flips)<br/>• Scale 1.250x: [3, 2560, 2560] (4 Flips)"]:::stageNode
+
+        M1["<b>Model 1: timm-efficientnet-b3</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Ensemble Weight: w1 = 0.40"]:::modelNode
+        M2["<b>Model 2: resnet34</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Ensemble Weight: w2 = 0.20"]:::modelNode
+        M3["<b>Model 3: tu-convnext_tiny + scSE</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Ensemble Weight: w3 = 0.40"]:::modelNode
+
+        Unzoom_Fusion["<b>Flip Un-inversion & Resampling</b><br/>• Invert flips &rarr; Bilinear resample to [1, 2048, 2048]<br/>• 36-Pass Weighted Linear Logit Fusion:<br/>  L_ens = 0.40*Z_EffNet + 0.20*Z_ResNet + 0.40*Z_ConvNeXt<br/>• Activation: P_ens = Sigmoid(L_ens) in [0.0, 1.0]"]:::stageNode
+
+        TTA_Pyramid --> M1 & M2 & M3
+        M1 & M2 & M3 --> Unzoom_Fusion
     end
 
-    subgraph Density_Calibration ["Component 7: Two-Pass Physical Density Calibration"]
-        CGB --> Pass1["Pass 1: Per-Image Outlier Capping<br/>Frames > 10 instances: prune low-confidence noise"]
-        Pass1 --> Pass2["Pass 2: Global Solar Density Ceiling<br/>Rank composite confidence; cap global density at 5.50 fil/img"]
+    PreProc -- "Test Stream" --> TTA_Pyramid
+    PQ_Check -. "Deploy Optimal Weights" .-> M1 & M2 & M3
+
+    subgraph Post_Processing ["Component 6: Physics-Informed Morphometric Post-Processing"]
+        direction TB
+        Binarize["<b>1. Station-Calibrated Thresholding</b><br/>• High-Contrast (Mh, Th, Uh): tau = 0.55<br/>• Seeing-Attenuated (Bh, Ch, Lh): tau = 0.51<br/>• Output: Binary Mask B in {0, 1}^(2048x2048)"]:::postNode
+
+        Dilation_ReMult["<b>2. Curvilinear Grouping & Zero-Bloat Re-Multiplication</b><br/>• Dilation: B_group = dilate(B, Ellipse r=10px)<br/>• Connected Components: C_group = CC8(B_group)<br/>• Strict Zero-Bloat: C_final = C_group * B"]:::postNode
+
+        TAC_SR["<b>3. TAC-SR v2: Tapering-Aware Spine Recovery</b><br/>• Euclidean Distance Transform: dist(x,y)<br/>• Trigger: median(dist) &le; 2.5px OR p25(dist) &le; 2.0px<br/>• Boundary Recovery Gate: P_ens &ge; 0.35 (thick regions locked)"]:::postNode
+
+        Morph_Filter["<b>4. Deterministic Solar-Physics Morphometric Pruning</b><br/>• Aspect Ratio: AR = max(w,h) / min(w,h)<br/>• Solidity: S = Area / ConvexArea | Core: P90<br/>• Prune If: (S &gt; 0.76 & AR &lt; 1.75 & P90 &lt; 0.62) OR (AR &lt; 1.80 & S &gt; 0.82)"]:::postNode
+
+        CGB_Module["<b>5. Collinear Tube Gap Bridging (CGB)</b><br/>• Max Gap &le; 35px | Collinearity: |v1 . v2| &ge; 0.906<br/>• Mean Probability along Tube: &ge; 0.15 (Ch relaxed to 0.09)"]:::postNode
+
+        Binarize --> Dilation_ReMult --> TAC_SR --> Morph_Filter --> CGB_Module
     end
 
-    Density_Calibration --> COCO["COCO UTF-8 RLE Bitmask Encoding"]
-    COCO --> Output["Competition submission.csv<br/>(Optimal Physical Density: ~5.5 fil/img | Public LB: 0.37)"]
+    Unzoom_Fusion --> Binarize
+
+    subgraph Density_Calibration ["Component 7: Two-Pass Ground-Truth Density Calibration"]
+        direction TB
+        Pass1["<b>Pass 1: Per-Frame Outlier Suppression</b><br/>• If Instances &gt; 10 in Frame:<br/>  Prune faint candidates: mean_prob &lt; 0.58 & Area &lt; 650px"]:::calibNode
+
+        Pass2["<b>Pass 2: Global Solar Constant Density Ceiling</b><br/>• Consensus Benchmark Target: 5.50 filaments/image<br/>• Rank all test candidates by mean ensemble probability<br/>• Retain top 990 instances (180 test imgs x 5.5 fil/img)"]:::calibNode
+
+        Pass1 --> Pass2
+    end
+
+    CGB_Module --> Pass1
+
+    subgraph Submission_Output ["Final Competition Output"]
+        direction TB
+        RLE_Encoder["<b>COCO UTF-8 RLE Bitmask Encoding</b><br/>• pycocotools mask encoding to UTF-8 string"]:::ioNode
+        SubFile["<b>Final submission.csv</b><br/>• 180 Test Images | ~990 Filaments (~5.5 fil/img)<br/>• Verified Peak Val PQ: 0.4346 | Kaggle Public LB: 0.37"]:::ioNode
+        RLE_Encoder --> SubFile
+    end
+
+    Pass2 --> RLE_Encoder
 ```
 
 ---
@@ -54,7 +109,7 @@ Before feeding solar disk observations into either the training patch generator 
 ### 2.1 Raw Solar Observation Characteristics
 Ground-based solar observations in the MAGFiLO benchmark are obtained from the Global Oscillation Network Group (GONG) across six worldwide observatories:
 - **Spatial Resolution:** $2048 \times 2048$ pixels per frame.
-- **Spectral Line:** Narrowband $H\alpha$ centered at $656.28\text{ nm}$ ($6562.8\text{ \AA}$), capturing upper photospheric and lower chromospheric plasma dynamics.
+- **Spectral Line:** Narrowband $H\alpha$ centered at $656.28\text{ nm}$ ($6562.8\text{ \text{\AA}}$), capturing upper photospheric and lower chromospheric plasma dynamics.
 - **Dynamic Range:** Uncompressed single-channel integer arrays ($\text{uint8}$ or $\text{uint16}$).
 - **Optical Artefacts:** Variable atmospheric seeing, instrument gain offsets, cosmic ray hits, solar limb darkening, and telescope dust motes.
 
@@ -98,7 +153,9 @@ In MAGFiLO, expert solar physicists provided polygon annotations for each visibl
 
 ### 2.5 Metadata Extraction & Station Bias Profiling
 The filename of each observation encodes the timestamp and observing telescope station:
-$$\text{Filename format: } \texttt{YYYYMMDDHHMMSS[StationID].png} \quad (\text{e.g., } \texttt{20110205082634Lh.png})$$
+
+$$\text{Filename format: } \text{YYYYMMDDHHMMSS[StationID].png} \quad (\text{e.g., } \text{20110205082634Lh.png})$$
+
 Our parser extracts the station code:
 - **High-Contrast Observatories:** Mauna Loa (`Mh`), Teide (`Th`), Udaipur (`Uh`).
 - **Seeing-Attenuated Observatories:** Big Bear (`Bh`), Cerro Tololo (`Ch`), Learmonth (`Lh`).
@@ -533,7 +590,7 @@ $$\mathrm{dist}(x, y) = \min_{(u, v) \in \partial \Omega} \sqrt{(x - u)^2 + (y -
 
 An instance $\Omega$ is classified as a **thin/tapering filament** if:
 
-$$\mathrm{median}(\mathrm{dist}) \le 2.5\text{ px} \quad \lor \quad P_{25}(\mathrm{dist}) \le 2.0\text{ px}$$
+$$\mathrm{median}(\mathrm{dist}) \le 2.5\text{ px} \quad \vee \quad P_{25}(\mathrm{dist}) \le 2.0\text{ px}$$
 
 - **Boundary Recovery:** For qualifying instances, adjacent boundary pixels satisfying $P_{\text{ens}}(x, y) \ge 0.35$ are incorporated into the mask.
 - **Thick Active Region Protection:** Macroscopic filament bodies ($\mathrm{median}(\mathrm{dist}) \ge 3.5\text{ px}$) are strictly excluded from recovery, preventing lateral dilation from degrading SQ.
@@ -548,7 +605,7 @@ We compute three physical geometric descriptors for every candidate:
 
 A candidate instance is pruned as spurious non-filament noise if and only if:
 
-$$\left(\mathrm{Solidity} \gt 0.76 \ \land \ \mathrm{AR} \lt 1.75 \ \land \ P_{90} \lt 0.62\right) \quad \lor \quad \left(\mathrm{AR} \lt 1.80 \ \land \ \mathrm{Solidity} \gt 0.82\right)$$
+$$\left(\mathrm{Solidity} > 0.76 \ \wedge \ \mathrm{AR} < 1.75 \ \wedge \ P_{90} < 0.62\right) \quad \vee \quad \left(\mathrm{AR} < 1.80 \ \wedge \ \mathrm{Solidity} > 0.82\right)$$
 
 - **Physical Guarantee:** True elongated plasma ribbons ($\mathrm{AR} \ge 1.75$) and dense magnetic cores ($P_{90} \ge 0.62$) are mathematically $100\%$ preserved. Only circular, low-confidence convective blobs are pruned.
 

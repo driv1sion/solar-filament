@@ -199,13 +199,21 @@ $$\text{IoU}(y, \hat{y}) = \frac{|y \cap \hat{y}|}{|y \cup \hat{y}|} > 0.50$$
 > *Proof:*
 > Suppose there exist two disjoint predicted masks $\hat{y}_1$ and $\hat{y}_2$ ($\hat{y}_1 \cap \hat{y}_2 = \emptyset$) such that $\text{IoU}(y, \hat{y}_1) > 0.50$ and $\text{IoU}(y, \hat{y}_2) > 0.50$.
 > By definition:
+>
 > $$\frac{|y \cap \hat{y}_1|}{|y \cup \hat{y}_1|} > \frac{1}{2} \implies |y \cap \hat{y}_1| > \frac{1}{2}|y \cup \hat{y}_1| \ge \frac{1}{2}|y|$$
+>
 > Similarly:
+>
 > $$|y \cap \hat{y}_2| > \frac{1}{2}|y|$$
+>
 > Summing both inequalities:
+>
 > $$|y \cap \hat{y}_1| + |y \cap \hat{y}_2| > |y|$$
+>
 > However, because $\hat{y}_1$ and $\hat{y}_2$ are mutually disjoint subsets of the image:
+>
 > $$|y \cap \hat{y}_1| + |y \cap \hat{y}_2| = |y \cap (\hat{y}_1 \cup \hat{y}_2)| \le |y|$$
+>
 > This yields $|y| > |y|$, a contradiction. $\blacksquare$
 
 **Significance:** Because $\text{IoU} > 0.50$ mathematically guarantees unique bipartite matching, the evaluation does not require expensive combinatorial optimization (e.g., the Hungarian algorithm). The matching is unambiguous.
@@ -220,9 +228,9 @@ Suppose a ground-truth filament $y$ of $1{,}000\text{ px}$ is physically divided
 - $\text{IoU}(y, \hat{y}_a) = \frac{450}{1000 + 450 - 450} = \frac{450}{1000} = 0.45 \le 0.50$ (Fails matching!).
 - $\text{IoU}(y, \hat{y}_b) = \frac{450}{1000} = 0.45 \le 0.50$ (Fails matching!).
 - **Result:**
-  - $\text{TP} \mathrel{+}= 0$
-  - $\text{FN} \mathrel{+}= 1$ (Ground truth was completely missed)
-  - $\text{FP} \mathrel{+}= 2$ (Both predicted pieces become false positives!)
+  - $\Delta\text{TP} = 0$
+  - $\Delta\text{FN} = +1$ (Ground truth was completely missed)
+  - $\Delta\text{FP} = +2$ (Both predicted pieces become false positives!)
   - Denominator impact: $+0.5(2) + 0.5(1) = +1.5$ to denominator with $0$ in numerator!
   - **A single fragmentation error turns 1 potential True Positive into 1 FN and 2 FPs!**
 
@@ -231,8 +239,8 @@ Suppose two distinct, parallel filaments ($y_1$ and $y_2$, each $500\text{ px}$)
 - $\text{IoU}(y_1, \hat{y}_{\text{merged}}) = \frac{500}{500 + 1050 - 500} = \frac{500}{1050} \approx 0.476 \le 0.50$ (Fails!).
 - $\text{IoU}(y_2, \hat{y}_{\text{merged}}) = \frac{500}{1050} \approx 0.476 \le 0.50$ (Fails!).
 - **Result:**
-  - $\text{FN} \mathrel{+}= 2$ (Both real filaments are lost)
-  - $\text{FP} \mathrel{+}= 1$ (The merged blob is an unmatched prediction)
+  - $\Delta\text{FN} = +2$ (Both real filaments are lost)
+  - $\Delta\text{FP} = +1$ (The merged blob is an unmatched prediction)
   - **Over-merging destroys two True Positives and creates 2 FNs and 1 FP!**
 
 #### 3. The Overlap Cliff ($0.49$ vs. $0.51$ IoU):
