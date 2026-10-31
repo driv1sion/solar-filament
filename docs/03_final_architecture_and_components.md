@@ -217,7 +217,7 @@ Solar physics dictates that full-disk solar observations have no intrinsic gravi
 #### Why Reject Affine Shearing, Elastic Deformations, and Color Jitter?
 - **No Non-Orthogonal Interpolation:** Bilinear and bicubic interpolations used during affine shearing or elastic warping act as low-pass spatial filters, artificially blurring the high-frequency absorption contrast along 2-pixel-wide spines.
 - **Physical Plausibility:** Solar filaments are physical magnetic flux ropes in magnetohydrodynamic (MHD) equilibrium. Artificial shearing distorts the natural curvature and magnetic shear profiles. The 8-element Dihedral group $D_4$ provides maximal augmentation variance with mathematically zero interpolation blur.
-- **No Random Brightness/Contrast Jitter:** Random brightness jitter alters the calibrated physical optical depth ($\tau = -\ln(I / I_0)$), destroying the network's ability to calibrate station-specific thresholds.
+- **No Random Brightness/Contrast Jitter:** Random brightness jitter alters the calibrated physical optical depth ($\tau = -\ln\left(\frac{I}{I_0}\right)$), destroying the network's ability to calibrate station-specific thresholds.
 
 ### 3.4 Training Engine Decisions: Choices vs. Alternatives
 
@@ -274,9 +274,9 @@ Where:
 
 ### 4.3 Why Reject Alternative Losses?
 - **Why Not Pure BCE?** BCE evaluates pixels independently. With $<0.8\%$ foreground pixels, a trivial model predicting all zeros achieves $>99.2\%$ binary accuracy while scoring $0.000\text{ PQ}$.
-- **Why Not Pure Focal Loss?** While Lin et al. (ICCV 2017) designed Focal Loss ($\mathcal{L}_{\text{Focal}} = -\alpha_t (1 - p_t)^\gamma \log(p_t)$) to combat extreme class imbalance by dynamically modulating gradient magnitude via the modulating factor $(1 - p_t)^\gamma$, it is fundamentally suboptimal as a primary loss for solar filament instance segmentation for four critical reasons:
+- **Why Not Pure Focal Loss?** While Lin et al. (ICCV 2017) designed Focal Loss $\mathcal{L}_{\mathrm{Focal}} = -\alpha_t (1 - p_t)^\gamma \ln(p_t)$ to combat extreme class imbalance by dynamically modulating gradient magnitude via the modulating factor $(1 - p_t)^\gamma$, it is fundamentally suboptimal as a primary loss for solar filament instance segmentation for four critical reasons:
   1. *Uncoordinated Pixel-Wise Independence vs. Metric-Level IoU Alignment:* Focal Loss evaluates pixels as independent Bernoulli trials. It operates purely on localized calibration error without optimizing structured, set-level spatial overlap (Jaccard / IoU). In Panoptic Quality (PQ), an instance matching cliff exists at exactly $\text{IoU} > 0.50$; missing this threshold by even a single pixel boundary yields $0$ true positive credit. Lovász-Hinge directly computes the submodular convex surrogate of Jaccard loss across the entire spatial mask, penalizing boundary-sorting mistakes that govern instance overlap.
-  2. *Incompatibility with Continuous Multi-Annotator Consensus Targets ($Y \in [0.0, 1.0]$):* Focal Loss's modulating factor $(1 - p_t)^\gamma$ requires a discrete binary ground truth $y \in \{0, 1\}$ to define $p_t$. Solar filament boundaries are intrinsically fuzzy and documented by multi-annotator probabilistic consensus ($Y \in [0.0, 1.0]$). Forcing binarization ($Y \ge 0.5$) discards epistemic agreement and injects high-frequency label noise at faint extremities. Conversely, our Continuous Soft-Dice loss naturally and smoothly ingests continuous targets without step-function gradient artifacts.
+  2. *Incompatibility with Continuous Multi-Annotator Consensus Targets ($Y \in [0, 1]$):* Focal Loss's modulating factor $(1 - p_t)^\gamma$ requires a discrete binary ground truth $y \in \{0, 1\}$ to define $p_t$. Solar filament boundaries are intrinsically fuzzy and documented by multi-annotator probabilistic consensus ($Y \in [0.0, 1.0]$). Forcing binarization ($Y \ge 0.5$) discards epistemic agreement and injects high-frequency label noise at faint extremities. Conversely, our Continuous Soft-Dice loss naturally and smoothly ingests continuous targets without step-function gradient artifacts.
   3. *Redundancy with Foreground-Biased Crop Sampling:* The primary motivation for Focal Loss—preventing the vast sea of easy background negatives ($>99.2\%$ of solar disk) from overwhelming gradients—is already resolved deterministically in our data pipeline. By constructing 50% filament-centered and 50% hard-negative edge crops ($768 \times 768$), easy background domination is eliminated upstream before tensors reach the computational graph.
   4. *Suppression of Informative Low-Confidence Gradients on Faint Barbs:* Thin filament barbs and extremity flux ropes exhibit subtle intensity absorption depressions relative to the surrounding quiet-Sun chromosphere. Setting $\gamma = 2.0$ aggressively squashes gradients for predictions in intermediate probability ranges ($p \in [0.2, 0.5]$), treating them as "moderately easy" or near-background, which starves the network of the exact learning signal needed to trace continuous narrow topologies without fragmentation.
 - **Why Not clDice (Topological Skeleton Loss)?** Evaluated in Failed Experiment v17 (see [Part 2: Experiment Evolution](file:///Users/sadhumitha/Documents/projects/solar-filament/docs/02_experiment_evolution_and_ablation.md)). Iterated soft-morphological skeletonization creates deep non-convex computational graphs. Gradients exploded on faint granulation noise, surging false positives from $114 \to 258$ and dropping PQ to $0.4208$.
@@ -348,13 +348,15 @@ The ensembling engine integrates three structurally heterogeneous convolutional 
    For Model 3 (`tu-convnext_tiny`), each decoder stage routes through an `scSE` (Spatial and Channel Squeeze-and-Excitation) attention module, dynamically exciting spinal features while recalibrating channel dependencies.
 4. **Step 4: Raw Logit Projection & Geometric Flip Inversion:**
    A final $1 \times 1$ convolution projects decoder feature maps to a 1-channel unconstrained spatial logit tensor:
-   $$z_{m, v}(x, y) = \text{Conv}_{1 \times 1}(D_1) \in (-\infty, +\infty)$$
-   The spatial flip transformation of view $v$ is inverted back to the canonical frame ($\tilde{z}_{m, v} = \text{unflip}(z_{m, v})$), and zoomed maps ($2304 \times 2304$ and $2560 \times 2560$) are bilinearly resampled back to native $2048 \times 2048$.
+
+   $$z_{m,v}(x,y) = \mathrm{Conv}_{1 \times 1}(D_1) \in (-\infty, +\infty)$$
+
+   The spatial flip transformation of view $v$ is inverted back to the canonical frame ($\tilde{z}_{m,v} = \mathrm{unflip}(z_{m,v})$), and zoomed maps ($2304 \times 2304$ and $2560 \times 2560$) are bilinearly resampled back to native $2048 \times 2048$ resolution.
 5. **Step 5: Weighted Logit-Space Linear Fusion & Sigmoid Projection:**
    The 12 view logits per model are averaged to yield each model's unified logit map:
-   $$Z_m(x, y) = \frac{1}{12} \sum_{v=1}^{12} \tilde{z}_{m, v}(x, y)$$
+   $$\mathrm{Z}_m(x,y) = \frac{1}{12} \sum_{v=1}^{12} \tilde{z}_{m,v}(x,y)$$
    The three model logit maps are linearly fused using our metric-optimized ensemble weights:
-   $$L_{\mathrm{ens}}(x, y) = 0.40 \cdot Z_{\text{EffNet}}(x, y) + 0.20 \cdot Z_{\text{ResNet}}(x, y) + 0.40 \cdot Z_{\text{ConvNeXt}}(x, y)$$
+   $$L_{\mathrm{ens}}(x,y) = 0.40 \cdot Z_{\mathrm{EffNet}}(x,y) + 0.20 \cdot Z_{\mathrm{ResNet}}(x,y) + 0.40 \cdot Z_{\mathrm{ConvNeXt}}(x,y)$$
    Finally, the Sigmoid function maps the fused real-valued logit map into the continuous consensus probability map:
    $$P_{\mathrm{ens}}(x, y) = \sigma(L_{\mathrm{ens}}(x, y)) = \frac{1}{1 + e^{-L_{\mathrm{ens}}(x, y)}} \in [0.0, 1.0]$$
 
@@ -576,14 +578,16 @@ $$\mathrm{Area}_{\mathrm{eff}} = \begin{cases} 450\text{ px} & \text{if Station}
 **Impact:** Lowering $\tau$ to $0.51$ recovers faint absorption troughs on seeing-attenuated stations, while maintaining $\tau = 0.55$ on sharp stations eliminates spurious quiet-sun granulation blobs.
 
 ### 7.2 Curvilinear Dilation Grouping & Component Re-Multiplication
+
 To prevent broken neutral lines from creating one-to-many fragmentation without dilating the true physical boundary:
-1. Binarize at effective threshold: $B = (P_{\text{ens}} \ge \tau_{\mathrm{eff}})$.
-2. Apply morphological dilation using an elliptical structuring element ($r = 10\text{px}$):
+
+1. Binarize at effective threshold: $B = (P_{\mathrm{ens}} \geq \tau_{\mathrm{eff}})$.
+2. Apply morphological dilation using an elliptical structuring element ($r = 10\,\mathrm{px}$):
    $$B_{\mathrm{group}} = \text{dilate}(B, \mathcal{E}_{r=10})$$
 3. Compute 8-connected components on $B_{\mathrm{group}}$:
-   $$\mathcal{C}_{\mathrm{group}} = \text{ConnectedComponents}(B_{\mathrm{group}})$$
-4. Re-multiply by original un-dilated mask:
-   $$\mathcal{C}_{\mathrm{final}} = \mathcal{C}_{\mathrm{group}} \odot B$$
+   $$C_{\mathrm{group}} = \mathrm{ConnectedComponents}(B_{\mathrm{group}})$$
+4. Re-multiply by the original undilated mask:
+   $$C_{\mathrm{final}} = C_{\mathrm{group}} \odot B$$
 
 **Why This Works:** Component IDs bridge across gaps within $20\text{ pixels}$, yet every pixel in the output mask belongs strictly to the original un-dilated mask $B$, guaranteeing **zero boundary dilation bloat** and preserving Segmentation Quality ($\text{SQ}$).
 
@@ -616,13 +620,17 @@ $$\left(\mathrm{Solidity} > 0.76 \ \wedge \ \mathrm{AR} < 1.75 \ \wedge \ P_{90}
 ### 7.5 Collinear Endpoint Gap Bridging (CGB)
 Filament flux ropes frequently exhibit small photometric gaps due to localized Doppler shifts or atmospheric seeing fluctuations. CGB identifies candidate pairs whose minimum Euclidean distance is $\le 35\text{px}$.
 
-1. **Collinearity Test:** The principal orientation vectors $\vec{v}_1, \vec{v}_2$ must satisfy:
-   $$|\vec{v}_1 \cdot \vec{v}_2| \ge \cos(25^\circ) \approx 0.906 \quad \text{and} \quad |\vec{v}_1 \cdot \vec{u}_{\mathrm{disp}}| \ge 0.70$$
-   where $\vec{u}_{\mathrm{disp}}$ is the unit displacement vector connecting the closest endpoints.
+1. **Collinearity Test:** The principal orientation vectors $\vec{v}_1$ and $\vec{v}_2$ must satisfy both conditions:
+   - $|\mathbf{v}_1 \cdot \mathbf{v}_2| \geq 0.906$
+   - $|\mathbf{v}_1 \cdot \mathbf{u}_d| \geq 0.70$
+
+   where $\vec{u}_{disp}$ is the unit displacement vector connecting the closest endpoints.
+
 2. **3-Pixel Tube Line Integral Verification:** The mean probability along a 3-pixel-wide tube connecting the endpoints is evaluated:
-   $$\frac{1}{N} \sum_{k=1}^N \max_{(u, v) \in \mathrm{Tube}(x_k, y_k)} P_{\text{ens}}(u, v) \ge \tau_{\mathrm{bridge}}$$
+   $$\frac{1}{N} \sum_{k=1}^{N} \max_{(u,v) \in \mathrm{Tube}(x_k,y_k)} P_{\mathrm{ens}}(u,v) \geq \tau_{\mathrm{bridge}}$$
    - For Cerro Tololo (`Ch`), $\tau_{\mathrm{bridge}} = 0.09$.
    - For all other stations, $\tau_{\mathrm{bridge}} = 0.15$.
+
 3. If verified, the two components are merged into a single instance ID using a Disjoint Set Union (DSU) structure, and a spline bridge is drawn.
 
 ### 7.6 Post-Processing Decisions: Choices vs. Alternatives
