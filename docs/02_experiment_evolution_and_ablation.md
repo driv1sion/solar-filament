@@ -106,11 +106,23 @@ The three selected backbones form a balanced tripartite synergy where each model
 
 ### 3.5 Why Not Pure Vision Transformers (ViT, Swin, DeiT)?
 - Standard Vision Transformers compute self-attention across flattened spatial tokens:
-  $$\text{Complexity} = O(N^2 \cdot D) \quad \text{where } N = \frac{H \cdot W}{P^2}$$
+
+  $$
+  \text{Complexity} = O(N^2 \cdot D) \quad \text{where } N = \frac{H \cdot W}{P^2}
+  $$
+
 - For a $2048 \times 2048$ image with standard $16 \times 16$ patches, the sequence length is:
-  $$N = \left(\frac{2048}{16}\right) \times \left(\frac{2048}{16}\right) = 128 \times 128 = 16{,}384\text{ tokens}$$
+
+  $$
+  N = \left(\frac{2048}{16}\right) \times \left(\frac{2048}{16}\right) = 128 \times 128 = 16{,}384\text{ tokens}
+  $$
+
 - The self-attention matrix requires computing and storing:
-  $$N^2 = (16{,}384)^2 = 268{,}435{,}456\text{ attention weights per head per layer}$$
+
+  $$
+  N^2 = (16{,}384)^2 = 268{,}435{,}456\text{ attention weights per head per layer}
+  $$
+
 - Under FP16 precision, this exceeds **$16\text{ GB}$ of VRAM** for a single forward pass, rendering training and inference completely infeasible within Kaggle's 16 GB GPU constraints.
 - While Swin Transformers restrict attention to local windows, window boundary partitions artificially slice continuous $1000\text{px}$ filaments, introducing border artifacts.
 
@@ -180,7 +192,11 @@ Understanding what **failed** and why is essential for technical depth:
 ### 5.3 Failed Experiment 3: Continuous Topological Skeleton Loss (clDice) in v17
 - **Notebook:** [`solar-filament-v17.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/solar-filament-v17.ipynb)
 - **The Hypothesis:** clDice (Shit et al., CVPR 2021) computes soft-skeletonization via iterated min/max pooling layers:
-  $$\text{skel}(X) = \text{ReLU}(X - \text{dilate}(\text{erode}(X)))$$
+
+  $$
+  \text{skel}(X) = \text{ReLU}(X - \text{dilate}(\text{erode}(X)))
+  $$
+
   Because filaments are curvilinear, optimizing skeleton precision and sensitivity should enforce spinal continuity and eliminate fragmentation.
 - **The Empirical Result:** Validation PQ dropped from $0.4397 \to 0.4208$, and False Positives surged to an all-time high of **$258\text{ FPs}$**.
 - **The Forensic Reason:**

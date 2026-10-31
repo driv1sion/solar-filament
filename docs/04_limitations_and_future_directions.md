@@ -16,7 +16,10 @@ This document provides a critical post-mortem of our final model's weaknesses, a
 
 ### 2.1 The Asymmetry Between SQ and RQ
 Our final model's Panoptic Quality factors into:
-$$\text{PQ} = \text{SQ} \times \text{RQ} = 0.6732 \times 0.6455 = 0.4346$$
+
+$$
+\text{PQ} = \text{SQ} \times \text{RQ} = 0.6732 \times 0.6455 = 0.4346
+$$
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -115,7 +118,10 @@ Forensic visual inspection of validation error cases reveals four persistent fai
 ## 4. Deep Forensic Analysis: Why the Validation (0.4346) vs. Leaderboard (0.37) Delta?
 
 One of the most important technical questions in this project is:
-$$\Delta_{\text{LB}} = 0.4346\text{ (Val PQ)} - 0.3700\text{ (Public LB)} = -0.0646$$
+
+$$
+\Delta_{\text{LB}} = 0.4346\text{ (Val PQ)} - 0.3700\text{ (Public LB)} = -0.0646
+$$
 
 Does this drop represent overfitting? **No.** A deep-dive analysis demonstrates that this delta is driven by four mathematical and physical factors:
 
@@ -144,7 +150,13 @@ Does this drop represent overfitting? **No.** A deep-dive analysis demonstrates 
 ### 4.1 The Non-Linear Knife-Edge Cliff (The Primary Driver)
 In semantic segmentation (mIoU/Dice), metric degradation is smooth and linear. A $2\text{px}$ boundary shift on unseen test images reduces Dice by $0.02\text{--}0.03$.
 In **Panoptic Quality**, matching is a discontinuous step function:
-$$\text{Match}(y, \hat{y}) = \begin{cases} 1 & \text{if } \text{IoU}(y, \hat{y}) > 0.50 \\ 0 & \text{otherwise} \end{cases}$$
+
+$$
+\text{Match}(y, \hat{y}) = \begin{cases} 
+1 & \text{if } \text{IoU}(y, \hat{y}) > 0.50 \\ 
+0 & \text{otherwise} 
+\end{cases}
+$$
 
 - On our local 67-image holdout cache, approximately $15\%$ of matched True Positives sit on the borderline: $\text{IoU} \in [0.51, 0.54]$.
 - On the unseen test set, slight variations in telescope focus or seeing blur cause a minor $2\text{--}3\%$ drop in boundary overlap.
@@ -153,7 +165,11 @@ $$\text{Match}(y, \hat{y}) = \begin{cases} 1 & \text{if } \text{IoU}(y, \hat{y})
   - It adds $+0.5$ to the denominator as an unmatched Ground Truth ($\text{FN}$).
   - It adds $+0.5$ to the denominator as an unmatched Prediction ($\text{FP}$).
 - **The Math:** If just $12\%$ of borderline filaments cross below the $0.50$ cliff, Recognition Quality drops from $0.6455 \to 0.5500$:
-  $$\text{PQ} = 0.6732 \times 0.5500 = \mathbf{0.3702}$$
+
+  $$
+  \text{PQ} = 0.6732 \times 0.5500 = \mathbf{0.3702}
+  $$
+
   This single non-linear mechanism completely accounts for the observed leaderboard score.
 
 ### 4.2 Test Ground-Truth Consensus Binarization
@@ -195,7 +211,11 @@ If this research were extended into a multi-year astrophysical imaging initiativ
 - **The Current Limitation:** Standard Vision Transformers (ViTs) have $O(N^2)$ quadratic complexity, making native $2048 \times 2048$ self-attention impossible ($N = 16{,}384\text{ tokens} \implies 2.68 \times 10^8$ attention weights, requiring $>16\text{ GB}$ VRAM).
 - **The Mamba Solution:**
   State-Space Models (Gu et al., 2023) and **Vision Mamba (VMamba)** (Liu et al., 2024) formulate global feature mixing through continuous linear state equations discretized via Zero-Order Hold (ZOH):
-  $$h'(t) = \mathbf{A}h(t) + \mathbf{B}x(t), \quad y(t) = \mathbf{C}h(t) + \mathbf{D}x(t)$$
+
+  $$
+  h'(t) = \mathbf{A}h(t) + \mathbf{B}x(t), \quad y(t) = \mathbf{C}h(t) + \mathbf{D}x(t)
+  $$
+
   With the **2D Selective Scan (SS2D)** mechanism, VMamba processes 2D spatial sequences in four directions (top-left to bottom-right, bottom-right to top-left, etc.) with **linear complexity $O(N)$**.
 - **Expected Impact:** Allows the entire $2048 \times 2048$ full-disk image to be processed natively in a single forward pass with an omnidirectional global receptive field, resolving long-range neutral line connectivity without heuristic post-processing.
 
@@ -206,7 +226,11 @@ If this research were extended into a multi-year astrophysical imaging initiativ
 - While GONG $H\alpha$ observations measure chromospheric plasma absorption, NASA's spaceborne **Solar Dynamics Observatory (SDO)** carries the **Helioseismic and Magnetic Imager (HMI)**, which continuously captures full-disk line-of-sight magnetograms ($B_{\text{LOS}}$).
 - **Proposed Architecture:**
   A two-stream multi-modal fusion network:
-  $$\mathbf{X} = \text{Concat}\left( I_{H\alpha}, B_{\text{LOS}}, |\nabla B_{\text{LOS}}| \right) \in \mathbb{R}^{3 \times 2048 \times 2048}$$
+
+  $$
+  \mathbf{X} = \text{Concat}\left( I_{H\alpha}, B_{\text{LOS}}, |\nabla B_{\text{LOS}}| \right) \in \mathbb{R}^{3 \times 2048 \times 2048}
+  $$
+
   - Stream 1 extracts plasma absorption intensity from $H\alpha$.
   - Stream 2 computes the magnetic gradient and neutral line topology from $B_{\text{LOS}}$.
 - **Expected Impact:** The network would have direct physical knowledge of where magnetic neutral lines exist. Ambiguous quiet-sun granulation noise (which has zero magnetic shear) would be automatically rejected by the magnetic stream, eliminating False Positives.
@@ -228,7 +252,11 @@ If this research were extended into a multi-year astrophysical imaging initiativ
 - **The Insight:** Filaments persist for days and rotate smoothly with solar rotation ($13.2^\circ/\text{day}$). In contrast, atmospheric seeing turbulence and cloud interference fluctuate on timescales of seconds or minutes.
 - **Proposed Architecture:**
   Ingest a sequence of 5 consecutive GONG observations spanning a 2-hour window:
-  $$\mathbf{V} \in \mathbb{R}^{5 \times 1 \times 2048 \times 2048}$$
+
+  $$
+  \mathbf{V} \in \mathbb{R}^{5 \times 1 \times 2048 \times 2048}
+  $$
+
   Using a Spatio-Temporal Deformable ConvNet or ConvLSTM:
   - Atmospheric seeing artifacts change rapidly between frames and are filtered out as incoherent temporal noise.
   - Coherent physical filaments persist and rotate predictably, allowing the network to achieve near-perfect noise suppression.

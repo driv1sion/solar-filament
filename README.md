@@ -15,7 +15,11 @@ The benchmark data originates from **MAGFiLO** (*Nature Scientific Data 2024*, [
 
 ### Evaluation Metric: Panoptic Quality (PQ)
 The competition is evaluated using the Panoptic Quality metric ([10.1109/CVPR.2019.00963](https://ieeexplore.ieee.org/abstract/document/8953237)):
-$$\text{PQ} = \frac{\sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|} = \text{SQ} \times \text{RQ}$$
+
+$$
+\text{PQ} = \frac{\sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|} = \text{SQ} \times \text{RQ}
+$$
+
 where a true match strictly requires $\text{IoU}(y, \hat{y}) > 0.50$. In addition, severe penalties apply for:
 - **One-to-Many Fragmentation:** When a single continuous physical filament is fragmented into multiple predicted masks.
 - **Many-to-One Over-Merging:** When separate neighboring filaments are merged into one mask.
@@ -41,7 +45,7 @@ where a true match strictly requires $\text{IoU}(y, \hat{y}) > 0.50$. In additio
    - In v22, the obsolete diagnostic is removed and `tac_pos_gate = 0.35` is strictly locked as the proven optimal baseline.
 
 4. **Adaptive `bridge_thr` Per Observatory (Cerro Tololo Neutral Line Recovery):**
-   - Lowers `eff_bridge_thr = 0.09` specifically for Cerro Tololo (`Ch`), safely bridging legitimate magnetic flux ropes along continuous neutral lines while maintaining strict collinearity ($>= 0.70$) and gap bounds ($<= 35\text{px}$).
+   - Lowers `eff_bridge_thr = 0.09` specifically for Cerro Tololo (`Ch`), safely bridging legitimate magnetic flux ropes along continuous neutral lines while maintaining strict collinearity ($\ge 0.70$) and gap bounds ($\le 35\text{px}$).
 
 5. **TAC-SR Percentile Tightening: p25 Extremity Evaluation:**
    - Isolates tapering barbs and terminus extremities where at least 25% of pixels are within 2px of an edge (`median <= 2.5 or p25 <= 2.0`), recovering boundary overlap on thin filaments without dilating thick active bodies.
@@ -51,7 +55,11 @@ where a true match strictly requires $\text{IoU}(y, \hat{y}) > 0.50$. In additio
 
 7. **Pure CNN Tri-Backbone Precision Ensemble (Zero Boundary Dilution):**
    - Combines three complementary architectures:
-     $$\hat{L} = 0.40 \cdot L_{\text{EffNet-B3}} + 0.20 \cdot L_{\text{ResNet-34}} + 0.40 \cdot L_{\text{ConvNeXt-scSE}}$$
+
+     $$
+     \hat{L} = 0.40 \cdot L_{\text{EffNet-B3}} + 0.20 \cdot L_{\text{ResNet-34}} + 0.40 \cdot L_{\text{ConvNeXt-scSE}}
+     $$
+
    - Fused in logit space with full 12-view Zoom TTA ($[1.0, 1.125, 1.25] \times 4\text{ flips}$) and peak VRAM $< 2.4\text{ GB}$.
 
 ---

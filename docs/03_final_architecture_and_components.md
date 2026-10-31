@@ -139,7 +139,11 @@ def load_and_preprocess_solar_frame(image_path: str) -> np.ndarray:
 All three ensemble encoders are initialized with pretrained weights trained on ImageNet-1k (which expects 3 input color channels: Red, Green, Blue).
 
 - **The Alternative (Custom 1-Channel Conv1):** One could modify the first convolutional layer by summing or averaging the weights across the input channel dimension to accept a 1-channel input:
-  $$W_{\text{new}} = \frac{1}{3}(W_R + W_G + W_B) \in \mathbb{R}^{C_{\text{out}} \times 1 \times K \times K}$$
+
+  $$
+  W_{\text{new}} = \frac{1}{3}(W_R + W_G + W_B) \in \mathbb{R}^{C_{\text{out}} \times 1 \times K \times K}
+  $$
+
 - **Why Synthetic Replication Was Chosen Instead:**
   1. ImageNet early conv layers learn specialized phase-shifted spatial Gabor filters across individual color channels. Collapsing them to 1 channel disturbs the calibrated frequency response of the filter banks.
   2. Modifying the layer topology invalidates exact checkpoint loading in standard model libraries (`timm`, `smp`).
@@ -148,13 +152,19 @@ All three ensemble encoders are initialized with pretrained weights trained on I
 ### 2.4 Ground Truth Soft Consensus Target Ingestion
 In MAGFiLO, expert solar physicists provided polygon annotations for each visible filament. Annotator disagreement is prevalent due to optical seeing variances.
 - **The Ingestion Formulation:** For an observation annotated by $K$ experts ($K \le 3$), the training target is ingested as a continuous soft consensus map:
-  $$Y(x, y) = \frac{1}{K} \sum_{k=1}^K M_k(x, y) \in [0.0, 1.0]$$
+
+  $$
+  Y(x, y) = \frac{1}{K} \sum_{k=1}^K M_k(x, y) \in [0.0, 1.0]
+  $$
+
 - **Why Soft Consensus Instead of Binary Majority Voting ($\ge 2/3$):** Binary majority voting discards annotator confidence. A pixel where only 1 annotator saw a faint boundary barb would be forced to $0.0$, penalizing the network with high loss gradients if it correctly detected the physical absorption trough. Continuous soft targets provide probabilistic targets that perfectly align with our Continuous Soft-Dice loss.
 
 ### 2.5 Metadata Extraction & Station Bias Profiling
 The filename of each observation encodes the timestamp and observing telescope station:
 
-$$\text{Filename format: } \text{YYYYMMDDHHMMSS[StationID].png} \quad (\text{e.g., } \text{20110205082634Lh.png})$$
+$$
+\text{Filename format: } \text{YYYYMMDDHHMMSS[StationID].png} \quad (\text{e.g., } \text{20110205082634Lh.png})
+$$
 
 Our parser extracts the station code:
 - **High-Contrast Observatories:** Mauna Loa (`Mh`), Teide (`Th`), Udaipur (`Uh`).
@@ -235,7 +245,9 @@ Standard Binary Cross-Entropy (BCE) treats every pixel independently, failing to
 
 We formulated a 3-part compound loss:
 
-$$\mathcal{L}_{\text{total}} = 0.40 \cdot \mathcal{L}_{\text{Lovasz}} + 0.35 \cdot \mathcal{L}_{\text{SoftDice}} + 0.25 \cdot \mathcal{L}_{\text{BCE}}$$
+$$
+\mathcal{L}_{\text{total}} = 0.40 \cdot \mathcal{L}_{\text{Lovasz}} + 0.35 \cdot \mathcal{L}_{\text{SoftDice}} + 0.25 \cdot \mathcal{L}_{\text{BCE}}
+$$
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -257,7 +269,9 @@ $$\mathcal{L}_{\text{total}} = 0.40 \cdot \mathcal{L}_{\text{Lovasz}} + 0.35 \cd
 ### 4.1 Continuous Soft-Dice Loss Formulation
 In MAGFiLO, multi-annotator agreement produces continuous soft targets $Y \in [0.0, 1.0]$. The Continuous Soft-Dice loss is defined as:
 
-$$\mathcal{L}_{\text{SoftDice}}(P, Y) = 1 - \frac{2 \sum_{i} p_i y_i + \epsilon}{\sum_{i} p_i^2 + \sum_{i} y_i^2 + \epsilon}$$
+$$
+\mathcal{L}_{\text{SoftDice}}(P, Y) = 1 - \frac{2 \sum_{i} p_i y_i + \epsilon}{\sum_{i} p_i^2 + \sum_{i} y_i^2 + \epsilon}
+$$
 
 Where $p_i = \sigma(z_i)$ is the predicted probability and $\epsilon = 10^{-6}$.
 - **Mathematical Property:** The squared denominator ($\sum p_i^2 + \sum y_i^2$) acts as a strong regularizer that severely penalizes confident false predictions ($p_i \to 1$ where $y_i = 0$), driving down spurious background noise.
@@ -265,7 +279,9 @@ Where $p_i = \sigma(z_i)$ is the predicted probability and $\epsilon = 10^{-6}$.
 ### 4.2 Lovasz-Hinge Submodular Jaccard Loss
 The discrete Jaccard loss $\Delta_{J}(y, \hat{y}) = 1 - \text{IoU}(y, \hat{y})$ is a piece-wise constant step function with zero gradients almost everywhere. Berman et al. (CVPR 2018) proved that the **Lovasz extension** of submodular set functions provides the tightest convex surrogate for Jaccard loss:
 
-$$\mathcal{L}_{\text{Lovasz}}(m) = \sum_{i=1}^N m(i) \cdot \left[ g_i - g_{i-1} \right]$$
+$$
+\mathcal{L}_{\text{Lovasz}}(m) = \sum_{i=1}^N m(i) \cdot \left[ g_i - g_{i-1} \right]
+$$
 
 Where:
 - $m(i)$ is the sorted vector of margin errors: $m_i(z, y) = \max(0, 1 - y_i^* \cdot z_i)$ with $y_i^* \in \{-1, +1\}$.
@@ -274,7 +290,11 @@ Where:
 
 ### 4.3 Why Reject Alternative Losses?
 - **Why Not Pure BCE?** BCE evaluates pixels independently. With $<0.8\%$ foreground pixels, a trivial model predicting all zeros achieves $>99.2\%$ binary accuracy while scoring $0.000\text{ PQ}$.
-- **Why Not Pure Focal Loss?** Focal loss downweights easy negatives through $(1 - p_t)^\gamma$, but it remains an uncoordinated pixel-wise loss that does not optimize global instance overlap.
+- **Why Not Pure Focal Loss?** While Lin et al. (ICCV 2017) designed Focal Loss ($\mathcal{L}_{\text{Focal}} = -\alpha_t (1 - p_t)^\gamma \log(p_t)$) to combat extreme class imbalance by dynamically modulating gradient magnitude via the modulating factor $(1 - p_t)^\gamma$, it is fundamentally suboptimal as a primary loss for solar filament instance segmentation for four critical reasons:
+  1. *Uncoordinated Pixel-Wise Independence vs. Metric-Level IoU Alignment:* Focal Loss evaluates pixels as independent Bernoulli trials. It operates purely on localized calibration error without optimizing structured, set-level spatial overlap (Jaccard / IoU). In Panoptic Quality (PQ), an instance matching cliff exists at exactly $\text{IoU} > 0.50$; missing this threshold by even a single pixel boundary yields $0$ true positive credit. Lovász-Hinge directly computes the submodular convex surrogate of Jaccard loss across the entire spatial mask, penalizing boundary-sorting mistakes that govern instance overlap.
+  2. *Incompatibility with Continuous Multi-Annotator Consensus Targets ($Y \in [0.0, 1.0]$):* Focal Loss's modulating factor $(1 - p_t)^\gamma$ requires a discrete binary ground truth $y \in \{0, 1\}$ to define $p_t$. Solar filament boundaries are intrinsically fuzzy and documented by multi-annotator probabilistic consensus ($Y \in [0.0, 1.0]$). Forcing binarization ($Y \ge 0.5$) discards epistemic agreement and injects high-frequency label noise at faint extremities. Conversely, our Continuous Soft-Dice loss naturally and smoothly ingests continuous targets without step-function gradient artifacts.
+  3. *Redundancy with Foreground-Biased Crop Sampling:* The primary motivation for Focal Loss—preventing the vast sea of easy background negatives ($>99.2\%$ of solar disk) from overwhelming gradients—is already resolved deterministically in our data pipeline. By constructing 50% filament-centered and 50% hard-negative edge crops ($768 \times 768$), easy background domination is eliminated upstream before tensors reach the computational graph.
+  4. *Suppression of Informative Low-Confidence Gradients on Faint Barbs:* Thin filament barbs and extremity flux ropes exhibit subtle intensity absorption depressions relative to the surrounding quiet-Sun chromosphere. Setting $\gamma = 2.0$ aggressively squashes gradients for predictions in intermediate probability ranges ($p \in [0.2, 0.5]$), treating them as "moderately easy" or near-background, which starves the network of the exact learning signal needed to trace continuous narrow topologies without fragmentation.
 - **Why Not clDice (Topological Skeleton Loss)?** Evaluated in Failed Experiment v17 (see [Part 2: Experiment Evolution](file:///Users/sadhumitha/Documents/projects/solar-filament/docs/02_experiment_evolution_and_ablation.md)). Iterated soft-morphological skeletonization creates deep non-convex computational graphs. Gradients exploded on faint granulation noise, surging false positives from $114 \to 258$ and dropping PQ to $0.4208$.
 
 ### 4.4 Optimizer and Learning Rate Dynamics
@@ -340,19 +360,38 @@ The ensembling engine integrates three structurally heterogeneous convolutional 
    - `tu-convnext_tiny`: $7 \times 7$ depthwise stages with LayerNorm ($C \in [96, 192, 384, 768]$).
 3. **Step 3: UNet Skip-Concatenation & Decoder Attention:**
    Decoders invert the spatial downsampling through progressive upsampling stages. High-resolution encoder feature maps $E_i$ are concatenated directly into decoder stages along the channel axis:
-   $$D_i = \text{DecoderBlock}\left(\left[ D_{i+1}^{\uparrow}, E_i \right]\right)$$
+
+   $$
+   D_i = \text{DecoderBlock}\left(\left[ D_{i+1}^{\uparrow}, E_i \right]\right)
+   $$
+
    For Model 3 (`tu-convnext_tiny`), each decoder stage routes through an `scSE` (Spatial and Channel Squeeze-and-Excitation) attention module, dynamically exciting spinal features while recalibrating channel dependencies.
 4. **Step 4: Raw Logit Projection & Geometric Flip Inversion:**
    A final $1 \times 1$ convolution projects decoder feature maps to a 1-channel unconstrained spatial logit tensor:
-   $$z_{m, v}(x, y) = \text{Conv}_{1 \times 1}(D_1) \in (-\infty, +\infty)$$
+
+   $$
+   z_{m, v}(x, y) = \text{Conv}_{1 \times 1}(D_1) \in (-\infty, +\infty)
+   $$
+
    The spatial flip transformation of view $v$ is inverted back to the canonical frame ($\tilde{z}_{m, v} = \text{unflip}(z_{m, v})$), and zoomed maps ($2304 \times 2304$ and $2560 \times 2560$) are bilinearly resampled back to native $2048 \times 2048$.
 5. **Step 5: Weighted Logit-Space Linear Fusion & Sigmoid Projection:**
    The 12 view logits per model are averaged to yield each model's unified logit map:
-   $$Z_m(x, y) = \frac{1}{12} \sum_{v=1}^{12} \tilde{z}_{m, v}(x, y)$$
+
+   $$
+   Z_m(x, y) = \frac{1}{12} \sum_{v=1}^{12} \tilde{z}_{m, v}(x, y)
+   $$
+
    The three model logit maps are linearly fused using our metric-optimized ensemble weights:
-   $$L_{\mathrm{ens}}(x, y) = 0.40 \cdot Z_{\text{EffNet}}(x, y) + 0.20 \cdot Z_{\text{ResNet}}(x, y) + 0.40 \cdot Z_{\text{ConvNeXt}}(x, y)$$
+
+   $$
+   L_{\mathrm{ens}}(x, y) = 0.40 \cdot Z_{\text{EffNet}}(x, y) + 0.20 \cdot Z_{\text{ResNet}}(x, y) + 0.40 \cdot Z_{\text{ConvNeXt}}(x, y)
+   $$
+
    Finally, the Sigmoid function maps the fused real-valued logit map into the continuous consensus probability map:
-   $$P_{\mathrm{ens}}(x, y) = \sigma(L_{\mathrm{ens}}(x, y)) = \frac{1}{1 + e^{-L_{\mathrm{ens}}(x, y)}} \in [0.0, 1.0]$$
+
+   $$
+   P_{\mathrm{ens}}(x, y) = \sigma(L_{\mathrm{ens}}(x, y)) = \frac{1}{1 + e^{-L_{\mathrm{ens}}(x, y)}} \in [0.0, 1.0]
+   $$
 
 ---
 
@@ -395,7 +434,11 @@ The three models were selected not by random trial, but by identifying three mut
 #### 5.2.2 Model 2: `resnet34` ($w_2 = 0.20$) — The Quiet-Sun Texture Regularizer & False Positive Dampener
 - **Architectural Mechanics:**
   - Built on classical residual BasicBlocks (He et al., CVPR 2016): two consecutive $3 \times 3$ dense convolutions with an additive identity skip shortcut:
-    $$y = \mathcal{F}(x, \{W_i\}) + x$$
+
+    $$
+    y = \mathcal{F}(x, \{W_i\}) + x
+    $$
+
   - Preserves full channel width throughout each stage without bottleneck compression.
 - **How It Is Used in the Pipeline:**
   - Trained on $768 \times 768$ native crops; weighted at $w_2 = 0.20$ in logit blending.
@@ -463,19 +506,34 @@ All three models utilize a UNet decoder topology with direct concatenated skip c
 
 ### 5.5 Why Sigmoid Activation for the Final Layer?
 The output of each model's final $1 \times 1$ convolutional decoder layer is an unconstrained real-valued logit tensor:
-$$z(x, y) \in (-\infty, +\infty)$$
+
+$$
+z(x, y) \in (-\infty, +\infty)
+$$
+
 The output activation is the standard **Sigmoid function**:
-$$\sigma(z) = \frac{1}{1 + e^{-z}} \in (0.0, 1.0)$$
+
+$$
+\sigma(z) = \frac{1}{1 + e^{-z}} \in (0.0, 1.0)
+$$
 
 #### Deep Architectural Rationale: Why Sigmoid Instead of Alternatives?
 1. **Binary Independence vs. Softmax Mutual Exclusivity:**
    - **Softmax:** Computes normalized exponentials across $C$ channels:
-     $$\text{Softmax}(z_i) = \frac{e^{z_i}}{\sum_{j=1}^C e^{z_j}}$$
+
+     $$
+     \text{Softmax}(z_i) = \frac{e^{z_i}}{\sum_{j=1}^C e^{z_j}}
+     $$
+
      Softmax forces competition across classes, enforcing that the sum of probabilities equals $1.0$. This is mathematically necessary for multiclass semantic segmentation (e.g., Road vs Car vs Sky). However, in binary solar filament segmentation, foreground and background are not competing classes; each pixel's status is an independent Bernoulli event.
    - **Memory & Computational Waste of Softmax:** Softmax would require generating 2 output channels in the decoder ($C = 2$: Background and Foreground), doubling the channel dimension of the final $1 \times 1$ convolution and consuming twice the memory with zero mathematical gain. Sigmoid requires exactly 1 channel ($C = 1$).
 2. **Direct Log-Odds Interpretation for Bayesian Blending:**
    - The logit $z(x, y)$ is the natural logarithm of the odds ratio:
-     $$z = \ln \left( \frac{p}{1 - p} \right)$$
+
+     $$
+     z = \ln \left( \frac{p}{1 - p} \right)
+     $$
+
    - Linearly blending logits from multiple models corresponds to multiplying independent likelihood ratios (Bayesian log-odds updating). Sigmoid maps this combined evidence back into a well-calibrated posterior probability.
 3. **Why Not Tanh or Hard Thresholding?**
    - **Tanh:** Maps to $(-1.0, +1.0)$. Negative values have no probability interpretation, preventing direct integration with probabilistic loss functions and post-processing filters.
@@ -486,7 +544,9 @@ $$\sigma(z) = \frac{1}{1 + e^{-z}} \in (0.0, 1.0)$$
 ### 5.6 Logit-Space Ensembling: Mathematical Superiority Over Probability Averaging
 In our pipeline, predictions are averaged in **Logit Space** ($\mathbb{R}$) before applying the Sigmoid activation:
 
-$$L_{\text{ens}}(x) = \sum_{m=1}^3 w_m \cdot z_m(x) \quad \implies \quad P_{\text{ens}}(x) = \sigma(L_{\text{ens}}(x))$$
+$$
+L_{\text{ens}}(x) = \sum_{m=1}^3 w_m \cdot z_m(x) \quad \implies \quad P_{\text{ens}}(x) = \sigma(L_{\text{ens}}(x))
+$$
 
 Where $w = [0.40, 0.20, 0.40]$ with $\sum w_m = 1.0$.
 
@@ -497,10 +557,20 @@ Consider a high-confidence filament spine pixel where Model 1 and Model 3 are co
 - Model 3 (`EffNet-B3`): $z_3 = +4.0 \implies p_3 = \sigma(4.0) = 0.982$
 
 1. **Probability Averaging:**
-   $$P_{\text{prob}} = 0.40(0.982) + 0.20(0.500) + 0.40(0.982) = 0.3928 + 0.1000 + 0.3928 = 0.8856$$
+
+   $$
+   P_{\text{prob}} = 0.40(0.982) + 0.20(0.500) + 0.40(0.982) = 0.3928 + 0.1000 + 0.3928 = 0.8856
+   $$
+
 2. **Logit-Space Linear Blending:**
-   $$L_{\text{ens}} = 0.40(4.0) + 0.20(0.0) + 0.40(4.0) = 1.6 + 0.0 + 1.6 = +3.20$$
-   $$P_{\text{ens}} = \sigma(3.20) = \frac{1}{1 + e^{-3.20}} = \mathbf{0.9608}$$
+
+   $$
+   L_{\text{ens}} = 0.40(4.0) + 0.20(0.0) + 0.40(4.0) = 1.6 + 0.0 + 1.6 = +3.20
+   $$
+
+   $$
+   P_{\text{ens}} = \sigma(3.20) = \frac{1}{1 + e^{-3.20}} = \mathbf{0.9608}
+   $$
 
 **Conclusion:** Sigmoid non-linearity compresses high-confidence logits. When averaging probabilities directly, a single uncertain model ($p = 0.50$) drags down the fused score heavily. In logit space, confident positive evidence dominates, ensuring that genuine filament spines cleanly exceed the detection threshold.
 
@@ -528,7 +598,9 @@ Consider a high-confidence filament spine pixel where Model 1 and Model 3 are co
 
 During inference, each full-resolution $2048 \times 2048$ image is evaluated across a multi-scale pyramid:
 
-$$\text{Pyramid Scales: } S \in [1.0, 1.125, 1.25] \implies [2048 \times 2048, 2304 \times 2304, 2560 \times 2560]$$
+$$
+\text{Pyramid Scales: } S \in [1.0, 1.125, 1.25] \implies [2048 \times 2048, 2304 \times 2304, 2560 \times 2560]
+$$
 
 At each scale, the resized image is processed across four orthogonal flip orientations:
 1. Original orientation: $x$
@@ -565,9 +637,19 @@ Observatories in the GONG network experience varying seeing conditions. Cerro To
 
 The effective binarization threshold and minimum area filter are dynamically adjusted:
 
-$$\tau_{\mathrm{eff}} = \begin{cases} 0.55 & \text{if Station} \in \{\text{Mh}, \text{Th}, \text{Uh}\} \\ 0.51 & \text{if Station} \in \{\text{Bh}, \text{Ch}, \text{Lh}\} \end{cases}$$
+$$
+\tau_{\mathrm{eff}} = \begin{cases} 
+0.55 & \text{if Station} \in \{\text{Mh}, \text{Th}, \text{Uh}\} \\ 
+0.51 & \text{if Station} \in \{\text{Bh}, \text{Ch}, \text{Lh}\} 
+\end{cases}
+$$
 
-$$\mathrm{Area}_{\mathrm{eff}} = \begin{cases} 450\text{ px} & \text{if Station} \in \{\text{Mh}, \text{Th}, \text{Uh}\} \\ 420\text{ px} & \text{if Station} \in \{\text{Bh}, \text{Ch}, \text{Lh}\} \end{cases}$$
+$$
+\mathrm{Area}_{\mathrm{eff}} = \begin{cases} 
+450\text{ px} & \text{if Station} \in \{\text{Mh}, \text{Th}, \text{Uh}\} \\ 
+420\text{ px} & \text{if Station} \in \{\text{Bh}, \text{Ch}, \text{Lh}\} 
+\end{cases}
+$$
 
 **Impact:** Lowering $\tau$ to $0.51$ recovers faint absorption troughs on seeing-attenuated stations, while maintaining $\tau = 0.55$ on sharp stations eliminates spurious quiet-sun granulation blobs.
 
@@ -575,22 +657,37 @@ $$\mathrm{Area}_{\mathrm{eff}} = \begin{cases} 450\text{ px} & \text{if Station}
 To prevent broken neutral lines from creating one-to-many fragmentation without dilating the true physical boundary:
 1. Binarize at effective threshold: $B = (P_{\text{ens}} \ge \tau_{\mathrm{eff}})$.
 2. Apply morphological dilation using an elliptical structuring element ($r = 10\text{px}$):
-   $$B_{\mathrm{group}} = \text{dilate}(B, \mathcal{E}_{r=10})$$
+
+   $$
+   B_{\mathrm{group}} = \text{dilate}(B, \mathcal{E}_{r=10})
+   $$
+
 3. Compute 8-connected components on $B_{\mathrm{group}}$:
-   $$\mathcal{C}_{\mathrm{group}} = \text{ConnectedComponents}(B_{\mathrm{group}})$$
+
+   $$
+   \mathcal{C}_{\mathrm{group}} = \text{ConnectedComponents}(B_{\mathrm{group}})
+   $$
+
 4. Re-multiply by original un-dilated mask:
-   $$\mathcal{C}_{\mathrm{final}} = \mathcal{C}_{\mathrm{group}} \odot B$$
+
+   $$
+   \mathcal{C}_{\mathrm{final}} = \mathcal{C}_{\mathrm{group}} \odot B
+   $$
 
 **Why This Works:** Component IDs bridge across gaps within $20\text{ pixels}$, yet every pixel in the output mask belongs strictly to the original un-dilated mask $B$, guaranteeing **zero boundary dilation bloat** and preserving Segmentation Quality ($\text{SQ}$).
 
 ### 7.3 TAC-SR v2: Tapering-Aware Spine Recovery
 To resolve the $0.50$ IoU cliff on thin barbs without dilating thick active regions, TAC-SR evaluates the Euclidean distance transform:
 
-$$\mathrm{dist}(x, y) = \min_{(u, v) \in \partial \Omega} \sqrt{(x - u)^2 + (y - v)^2}$$
+$$
+\mathrm{dist}(x, y) = \min_{(u, v) \in \partial \Omega} \sqrt{(x - u)^2 + (y - v)^2}
+$$
 
 An instance $\Omega$ is classified as a **thin/tapering filament** if:
 
-$$\mathrm{median}(\mathrm{dist}) \le 2.5\text{ px} \quad \vee \quad P_{25}(\mathrm{dist}) \le 2.0\text{ px}$$
+$$
+\mathrm{median}(\mathrm{dist}) \le 2.5\text{ px} \quad \vee \quad P_{25}(\mathrm{dist}) \le 2.0\text{ px}
+$$
 
 - **Boundary Recovery:** For qualifying instances, adjacent boundary pixels satisfying $P_{\text{ens}}(x, y) \ge 0.35$ are incorporated into the mask.
 - **Thick Active Region Protection:** Macroscopic filament bodies ($\mathrm{median}(\mathrm{dist}) \ge 3.5\text{ px}$) are strictly excluded from recovery, preventing lateral dilation from degrading SQ.
@@ -605,7 +702,9 @@ We compute three physical geometric descriptors for every candidate:
 
 A candidate instance is pruned as spurious non-filament noise if and only if:
 
-$$\left(\mathrm{Solidity} > 0.76 \ \wedge \ \mathrm{AR} < 1.75 \ \wedge \ P_{90} < 0.62\right) \quad \vee \quad \left(\mathrm{AR} < 1.80 \ \wedge \ \mathrm{Solidity} > 0.82\right)$$
+$$
+\left(\mathrm{Solidity} > 0.76 \ \wedge \ \mathrm{AR} < 1.75 \ \wedge \ P_{90} < 0.62\right) \quad \vee \quad \left(\mathrm{AR} < 1.80 \ \wedge \ \mathrm{Solidity} > 0.82\right)
+$$
 
 - **Physical Guarantee:** True elongated plasma ribbons ($\mathrm{AR} \ge 1.75$) and dense magnetic cores ($P_{90} \ge 0.62$) are mathematically $100\%$ preserved. Only circular, low-confidence convective blobs are pruned.
 
@@ -613,10 +712,17 @@ $$\left(\mathrm{Solidity} > 0.76 \ \wedge \ \mathrm{AR} < 1.75 \ \wedge \ P_{90}
 Filament flux ropes frequently exhibit small photometric gaps due to localized Doppler shifts or atmospheric seeing fluctuations. CGB identifies candidate pairs whose minimum Euclidean distance is $\le 35\text{px}$.
 
 1. **Collinearity Test:** The principal orientation vectors $\vec{v}_1, \vec{v}_2$ must satisfy:
-   $$|\vec{v}_1 \cdot \vec{v}_2| \ge \cos(25^\circ) \approx 0.906 \quad \text{and} \quad |\vec{v}_1 \cdot \vec{u}_{\mathrm{disp}}| \ge 0.70$$
+
+   $$
+   |\vec{v}_1 \cdot \vec{v}_2| \ge \cos(25^\circ) \approx 0.906 \quad \text{and} \quad |\vec{v}_1 \cdot \vec{u}_{\mathrm{disp}}| \ge 0.70
+   $$
+
    where $\vec{u}_{\mathrm{disp}}$ is the unit displacement vector connecting the closest endpoints.
 2. **3-Pixel Tube Line Integral Verification:** The mean probability along a 3-pixel-wide tube connecting the endpoints is evaluated:
-   $$\frac{1}{N} \sum_{k=1}^N \max_{(u, v) \in \mathrm{Tube}(x_k, y_k)} P_{\text{ens}}(u, v) \ge \tau_{\mathrm{bridge}}$$
+
+   $$
+   \frac{1}{N} \sum_{k=1}^N \max_{(u, v) \in \mathrm{Tube}(x_k, y_k)} P_{\text{ens}}(u, v) \ge \tau_{\mathrm{bridge}}
+   $$
    - For Cerro Tololo (`Ch`), $\tau_{\mathrm{bridge}} = 0.09$.
    - For all other stations, $\tau_{\mathrm{bridge}} = 0.15$.
 3. If verified, the two components are merged into a single instance ID using a Disjoint Set Union (DSU) structure, and a spline bridge is drawn.

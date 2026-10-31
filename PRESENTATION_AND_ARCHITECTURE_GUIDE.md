@@ -116,7 +116,11 @@ The GONG network consists of 6 identical ground-based telescopes stationed aroun
 - **Observation:** In the MAGFiLO benchmark, each solar observation was independently hand-annotated by an average of $1.63$ professional solar physicists (up to 3 annotators). While core filament spines have unanimous agreement ($1.0$), annotators disagree strongly on where thin diffuse barbs and terminus extremities taper into the quiet chromosphere.
 - **DL Problem:** If masks are binarized via hard majority voting ($\ge 0.5$), boundary training signals become noisy and contradictory. A pixel annotated by 1 out of 2 physicists would alternate between being penalized as false positive or false negative across epochs.
 - **Solution:** **Continuous Soft-Dice Loss**: The training target is a continuous consensus probability $Y \in [0.0, 1.0]$ representing the mean annotator agreement:
-  $$\mathcal{L}_{\text{SoftDice}} = 1 - \frac{2 \sum p_i y_i + \epsilon}{\sum p_i^2 + \sum y_i^2 + \epsilon}$$
+
+  $$
+  \mathcal{L}_{\text{SoftDice}} = 1 - \frac{2 \sum p_i y_i + \epsilon}{\sum p_i^2 + \sum y_i^2 + \epsilon}
+  $$
+
   This mathematically rewards the network for outputting calibrated probabilities ($p_i \approx 0.5$) in regions of physical annotator disagreement.
 
 ### 2.5 Challenge 5: Temporal Autocorrelation & Data Leakage Prevention
@@ -131,25 +135,43 @@ The GONG network consists of 6 identical ground-based telescopes stationed aroun
 ### 3.1 Mathematical Definition
 Panoptic Quality (PQ), originally introduced by Kirillov et al. (CVPR 2019), measures both instance-level detection performance and boundary-level segmentation precision in a single unified metric:
 
-$$\text{PQ} = \frac{\sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|}$$
+$$
+\text{PQ} = \frac{\sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|}
+$$
 
 PQ factors cleanly into the product of two independent, interpretable components:
 
-$$\text{PQ} = \text{SQ} \times \text{RQ}$$
+$$
+\text{PQ} = \text{SQ} \times \text{RQ}
+$$
 
 Where:
 1. **Segmentation Quality (SQ):** The average intersection-over-union of matched instances:
-   $$\text{SQ} = \frac{1}{|\text{TP}|} \sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})$$
+
+   $$
+   \text{SQ} = \frac{1}{|\text{TP}|} \sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})
+   $$
+
 2. **Recognition Quality (RQ):** The standard instance-level $F_1$-score:
-   $$\text{RQ} = \frac{|\text{TP}|}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|}$$
+
+   $$
+   \text{RQ} = \frac{|\text{TP}|}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|}
+   $$
 
 ### 3.2 The Unique True-Positive Condition: $\text{IoU} > 0.50$
 A predicted filament instance $\hat{y}$ is matched to a ground-truth filament $y$ if and only if:
-$$\text{IoU}(y, \hat{y}) = \frac{|y \cap \hat{y}|}{|y \cup \hat{y}|} > 0.50$$
+
+$$
+\text{IoU}(y, \hat{y}) = \frac{|y \cap \hat{y}|}{|y \cup \hat{y}|} > 0.50
+$$
 
 #### Why IoU > 0.50 is a Mathematical Milestone:
 If $\text{IoU}(y, \hat{y}_1) > 0.50$ and $\text{IoU}(y, \hat{y}_2) > 0.50$, then:
-$$|y \cap \hat{y}_1| > 0.5 |y| \quad \text{and} \quad |y \cap \hat{y}_2| > 0.5 |y|$$
+
+$$
+|y \cap \hat{y}_1| > 0.5 |y| \quad \text{and} \quad |y \cap \hat{y}_2| > 0.5 |y|
+$$
+
 Since the sum of their overlaps with $y$ exceeds $|y|$, $\hat{y}_1$ and $\hat{y}_2$ must overlap each other. But in panoptic segmentation, predicted instances are disjoint ($\hat{y}_1 \cap \hat{y}_2 = \emptyset$). 
 **Theorem:** There can be at most one predicted mask that matches any ground-truth mask with $\text{IoU} > 0.50$. This guarantees a strictly unique, non-ambiguous bipartite matching without needing Hungarian matching algorithms.
 
@@ -214,7 +236,9 @@ Why combine three distinct convolutional neural networks instead of a single mas
 
 Our Super-Ensemble deploys three complementary architectures totaling **69,727,884 parameters**:
 
-$$\hat{L} = 0.40 \cdot L_{\text{EffNet-B3}} + 0.20 \cdot L_{\text{ResNet-34}} + 0.40 \cdot L_{\text{ConvNeXt-scSE}}$$
+$$
+\hat{L} = 0.40 \cdot L_{\text{EffNet-B3}} + 0.20 \cdot L_{\text{ResNet-34}} + 0.40 \cdot L_{\text{ConvNeXt-scSE}}
+$$
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -242,13 +266,23 @@ $$\hat{L} = 0.40 \cdot L_{\text{EffNet-B3}} + 0.20 \cdot L_{\text{ResNet-34}} + 
 ### 4.2 Logit-Space Ensembling vs. Probability Averaging
 A critical mathematical design choice in our pipeline is performing the ensemble fusion in **Logit-Space** ($\mathbb{R}$) before applying the Sigmoid activation, rather than averaging post-sigmoid probabilities:
 
-$$\text{Logit Ensemble:} \quad P_{\text{ens}}(x) = \sigma \left( \sum_{m=1}^3 w_m \cdot z_m(x) \right) \quad \text{vs.} \quad P_{\text{prob}}(x) = \sum_{m=1}^3 w_m \cdot \sigma(z_m(x))$$
+$$
+\text{Logit Ensemble:} \quad P_{\text{ens}}(x) = \sigma \left( \sum_{m=1}^3 w_m \cdot z_m(x) \right) \quad \text{vs.} \quad P_{\text{prob}}(x) = \sum_{m=1}^3 w_m \cdot \sigma(z_m(x))
+$$
 
 #### Why Logit Blending is Mathematically Superior:
 1. **Preserving Sharp Decision Margins:** The sigmoid function $\sigma(z) = \frac{1}{1 + e^{-z}}$ compresses extreme confidence values into asymptotic flats near $0.0$ and $1.0$. If Model 1 is highly confident of a filament spine ($z_1 = +4.0 \implies p_1 = 0.982$) while Model 2 is slightly conservative ($z_2 = 0.0 \implies p_2 = 0.50$), probability averaging yields:
-   $$P_{\text{prob}} = 0.5(0.982) + 0.5(0.50) = 0.741$$
+
+   $$
+   P_{\text{prob}} = 0.5(0.982) + 0.5(0.50) = 0.741
+   $$
+
    In logit space:
-   $$z_{\text{ens}} = 0.5(4.0) + 0.5(0.0) = +2.0 \implies P_{\text{ens}} = \sigma(2.0) = 0.881$$
+
+   $$
+   z_{\text{ens}} = 0.5(4.0) + 0.5(0.0) = +2.0 \implies P_{\text{ens}} = \sigma(2.0) = 0.881
+   $$
+
    Logit-space ensembling prevents conservative models from diluting high-confidence spinal detections.
 2. **Log-Odds Bayesian Interpretability:** If individual models output independent log-posterior odds $\log \frac{P(y=1|x)}{P(y=0|x)}$, linear combination in logit space corresponds directly to Bayesian log-likelihood pooling under an uninformative prior.
 
@@ -257,14 +291,20 @@ Standard Cross-Entropy loss optimizes pixel-wise log-likelihood, treating every 
 
 We designed a custom 3-component Compound Boundary Loss:
 
-$$\mathcal{L}_{\text{total}} = 0.40 \cdot \mathcal{L}_{\text{Lovasz}} + 0.35 \cdot \mathcal{L}_{\text{SoftDice}} + 0.25 \cdot \mathcal{L}_{\text{BCE}}$$
+$$
+\mathcal{L}_{\text{total}} = 0.40 \cdot \mathcal{L}_{\text{Lovasz}} + 0.35 \cdot \mathcal{L}_{\text{SoftDice}} + 0.25 \cdot \mathcal{L}_{\text{BCE}}
+$$
 
 1. **Lovasz-Hinge Loss ($\mathcal{L}_{\text{Lovasz}}$, Weight $0.40$):**
    - The Jaccard loss ($1 - \text{IoU}$) is a discrete, non-differentiable step function. 
    - Lovasz-Hinge applies the mathematical theory of submodular set functions to construct the tightest convex surrogate extension of Jaccard loss. It directly optimizes the intersection-over-union metric that governs Panoptic Quality matching.
 2. **Continuous Soft-Dice Loss ($\mathcal{L}_{\text{SoftDice}}$, Weight $0.35$):**
    - Directly maximizes the foreground area overlap while scaling with annotator consensus:
-     $$\mathcal{L}_{\text{SoftDice}} = 1 - \frac{2 \sum p_i y_i + \epsilon}{\sum p_i^2 + \sum y_i^2 + \epsilon}$$
+
+     $$
+     \mathcal{L}_{\text{SoftDice}} = 1 - \frac{2 \sum p_i y_i + \epsilon}{\sum p_i^2 + \sum y_i^2 + \epsilon}
+     $$
+
 3. **Binary Cross-Entropy ($\mathcal{L}_{\text{BCE}}$, Weight $0.25$):**
    - Provides smooth, continuous, convex gradient flow across all pixels during early training epochs, anchoring model calibration before Lovasz and Dice fine-tune the boundary contours.
 
@@ -447,7 +487,11 @@ Instead, validation PQ plummeted from **0.4397 down to 0.4208**, accompanied by 
 - **The Theoretical Hypothesis:** clDice computes soft-skeletonization via repeated morphological erosions and dilations, calculating precision and sensitivity along the 1-pixel morphological skeleton. Since solar filaments are curvilinear, preserving spinal topology should prevent fragmentation.
 - **Why It Broke Down in Practice:**
   1. **Non-Convex Gradient Instability:** The continuous soft-skeletonization operator relies on iterated min/max pooling layers:
-     $$\text{skel}(X) = \text{ReLU}(X - \text{dilate}(\text{erode}(X)))$$
+
+     $$
+     \text{skel}(X) = \text{ReLU}(X - \text{dilate}(\text{erode}(X)))
+     $$
+
      Iterating this $6\text{ times}$ creates deep, highly non-linear computational graphs. In regions with faint, diffuse absorption (e.g., quiet-sun granulation), gradients exploded or vanished, preventing the encoder from converging to smooth spatial features.
   2. **Equal Penalty for Unequal Reality:** clDice penalizes a 1-pixel topological disconnection along a faint, harmless 4-pixel barb just as heavily as a disconnection along the primary 1000-pixel magnetic flux rope. The network wasted capacity trying to connect insignificant, ambiguous background noise filaments while sacrificing edge sharpness on major bodies.
 
@@ -566,7 +610,10 @@ In **Panoptic Quality**, matching is binary: $\text{IoU} > 0.50$.
 - On the unseen test set, minor atmospheric seeing blur or slight optical point-spread function (PSF) variation across telescopes causes boundary overlap to drop by just $2\text{--}3\%$.
 - An instance with $\text{IoU} = 0.49$ does **not** receive partial credit. It is stripped from the numerator ($0$) and penalized in the denominator as **$1\text{ False Negative} + 1\text{ False Positive}$**.
 - Losing just 10% of borderline matches to this cliff effect pulls Recognition Quality (RQ) from $0.645 \to 0.550$, immediately yielding:
-  $$\text{PQ} = 0.673 \times 0.550 = \mathbf{0.370}$$
+
+  $$
+  \text{PQ} = 0.673 \times 0.550 = \mathbf{0.370}
+  $$
 
 ### 9.2 Factor 2: Annotator Consensus Strictness on Test vs. Training Data
 - In the training set, annotator consensus masks are soft continuous maps ($Y \in [0.0, 1.0]$, mean $1.63$ annotators). We trained our models to detect genuine faint absorption barbs that had support from at least one physicist.

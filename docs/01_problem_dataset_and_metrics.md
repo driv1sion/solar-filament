@@ -108,7 +108,11 @@ Automated segmentation of solar filaments is substantially more difficult than s
 - **The Physical Reality:** Magnetic flux ropes are geometrically confined along magnetic neutral lines. A quiescent filament can snake across hundreds of thousands of kilometers on the solar surface ($800\text{--}1500\text{ pixels}$ in a $2048 \times 2048$ image). Yet, perpendicularly, their physical cross-section is extremely narrow ($3\text{--}15\text{ pixels}$), tapering to 1–2 pixels at the extremities.
 - **The Deep Learning Failure Mode:**
   Standard Convolutional Neural Networks (CNNs) rely on local $3 \times 3$ convolutional filters. The theoretical receptive field increases linearly with depth, but the **Effective Receptive Field (ERF)** (Luo et al., NeurIPS 2016) follows a Gaussian distribution with a standard deviation growing only as $O(\sqrt{L})$ where $L$ is depth:
-  $$\text{ERF}_{\text{effective}} \ll \text{Receptive Field}_{\text{theoretical}}$$
+
+  $$
+  \text{ERF}_{\text{effective}} \ll \text{Receptive Field}_{\text{theoretical}}
+  $$
+
   Because the ERF is localized, the network cannot propagate information from an active filament head to an undulating tail $500\text{ pixels}$ away across faint, discontinuous chromospheric absorption gaps. The network predicts disconnected fragments rather than a single continuous instance.
 - **Solution Required:**
   1. Deep backbones equipped with large depthwise convolutions ($7 \times 7$ kernels in ConvNeXt).
@@ -170,7 +174,9 @@ Automated segmentation of solar filaments is substantially more difficult than s
 ### 4.1 Mathematical Formulation of Panoptic Quality
 The competition metric is **Panoptic Quality (PQ)** (Kirillov et al., CVPR 2019):
 
-$$\text{PQ} = \frac{\sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|}$$
+$$
+\text{PQ} = \frac{\sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y})}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|}
+$$
 
 Where:
 - $y \in \mathcal{Y}$ represents a ground-truth filament instance mask.
@@ -181,17 +187,26 @@ Where:
 
 PQ factorizes into the product of two independent, highly interpretable metrics:
 
-$$\text{PQ} = \text{SQ} \times \text{RQ}$$
+$$
+\text{PQ} = \text{SQ} \times \text{RQ}
+$$
 
-$$\text{SQ} = \frac{1}{|\text{TP}|} \sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y}) \quad \text{(Segmentation Quality: Average overlap of matches)}$$
+$$
+\text{SQ} = \frac{1}{|\text{TP}|} \sum_{(y, \hat{y}) \in \text{TP}} \text{IoU}(y, \hat{y}) \quad \text{(Segmentation Quality: Average overlap of matches)}
+$$
 
-$$\text{RQ} = \frac{|\text{TP}|}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|} \quad \text{(Recognition Quality: Instance-level } F_1\text{-score)}$$
+$$
+\text{RQ} = \frac{|\text{TP}|}{|\text{TP}| + \frac{1}{2}|\text{FP}| + \frac{1}{2}|\text{FN}|} \quad \text{(Recognition Quality: Instance-level } F_1\text{-score)}
+$$
 
 ---
 
 ### 4.2 The Unique Matching Criterion: $\text{IoU} > 0.50$
 A predicted instance $\hat{y}$ is matched to a ground-truth instance $y$ if and only if:
-$$\text{IoU}(y, \hat{y}) = \frac{|y \cap \hat{y}|}{|y \cup \hat{y}|} > 0.50$$
+
+$$
+\text{IoU}(y, \hat{y}) = \frac{|y \cap \hat{y}|}{|y \cup \hat{y}|} > 0.50
+$$
 
 #### Mathematical Uniqueness Theorem:
 > **Theorem:** For any ground-truth mask $y$, there exists **at most one** predicted mask $\hat{y}$ in a panoptic prediction map satisfying $\text{IoU}(y, \hat{y}) > 0.50$.
@@ -200,21 +215,29 @@ $$\text{IoU}(y, \hat{y}) = \frac{|y \cap \hat{y}|}{|y \cup \hat{y}|} > 0.50$$
 > Suppose there exist two disjoint predicted masks $\hat{y}_1$ and $\hat{y}_2$ ($\hat{y}_1 \cap \hat{y}_2 = \emptyset$) such that $\text{IoU}(y, \hat{y}_1) > 0.50$ and $\text{IoU}(y, \hat{y}_2) > 0.50$.
 > By definition:
 >
-> $$\frac{|y \cap \hat{y}_1|}{|y \cup \hat{y}_1|} > \frac{1}{2} \implies |y \cap \hat{y}_1| > \frac{1}{2}|y \cup \hat{y}_1| \ge \frac{1}{2}|y|$$
+> $$
+> \frac{|y \cap \hat{y}_1|}{|y \cup \hat{y}_1|} > \frac{1}{2} \implies |y \cap \hat{y}_1| > \frac{1}{2}|y \cup \hat{y}_1| \ge \frac{1}{2}|y|
+> $$
 >
 > Similarly:
 >
-> $$|y \cap \hat{y}_2| > \frac{1}{2}|y|$$
+> $$
+> |y \cap \hat{y}_2| > \frac{1}{2}|y|
+> $$
 >
 > Summing both inequalities:
 >
-> $$|y \cap \hat{y}_1| + |y \cap \hat{y}_2| > |y|$$
+> $$
+> |y \cap \hat{y}_1| + |y \cap \hat{y}_2| > |y|
+> $$
 >
 > However, because $\hat{y}_1$ and $\hat{y}_2$ are mutually disjoint subsets of the image:
 >
-> $$|y \cap \hat{y}_1| + |y \cap \hat{y}_2| = |y \cap (\hat{y}_1 \cup \hat{y}_2)| \le |y|$$
+> $$
+> |y \cap \hat{y}_1| + |y \cap \hat{y}_2| = |y \cap (\hat{y}_1 \cup \hat{y}_2)| \le |y|
+> $$
 >
-> This yields $|y| > |y|$, a contradiction. $\blacksquare$
+> This yields $|y| > |y|$, a contradiction. $\ \blacksquare$
 
 **Significance:** Because $\text{IoU} > 0.50$ mathematically guarantees unique bipartite matching, the evaluation does not require expensive combinatorial optimization (e.g., the Hungarian algorithm). The matching is unambiguous.
 
