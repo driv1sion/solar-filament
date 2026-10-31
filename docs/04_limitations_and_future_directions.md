@@ -212,9 +212,8 @@ If this research were extended into a multi-year astrophysical imaging initiativ
 - **The Mamba Solution:**
   State-Space Models (Gu et al., 2023) and **Vision Mamba (VMamba)** (Liu et al., 2024) formulate global feature mixing through continuous linear state equations discretized via Zero-Order Hold (ZOH):
 
-  $$
-  h'(t) = \mathbf{A}h(t) + \mathbf{B}x(t), \quad y(t) = \mathbf{C}h(t) + \mathbf{D}x(t)
-  $$
+$$h'(t) = Ah(t) + Bx(t)$$
+$$y(t) = Ch(t) + Dx(t)$$
 
   With the **2D Selective Scan (SS2D)** mechanism, VMamba processes 2D spatial sequences in four directions (top-left to bottom-right, bottom-right to top-left, etc.) with **linear complexity $O(N)$**.
 - **Expected Impact:** Allows the entire $2048 \times 2048$ full-disk image to be processed natively in a single forward pass with an omnidirectional global receptive field, resolving long-range neutral line connectivity without heuristic post-processing.
@@ -227,9 +226,7 @@ If this research were extended into a multi-year astrophysical imaging initiativ
 - **Proposed Architecture:**
   A two-stream multi-modal fusion network:
 
-  $$
-  \mathbf{X} = \text{Concat}\left( I_{H\alpha}, B_{\text{LOS}}, |\nabla B_{\text{LOS}}| \right) \in \mathbb{R}^{3 \times 2048 \times 2048}
-  $$
+$$X = Concat(I_{H\alpha}, B_{LOS}, |\nabla B_{LOS}|) \in R^{3 \times 2048 \times 2048}$$
 
   - Stream 1 extracts plasma absorption intensity from $H\alpha$.
   - Stream 2 computes the magnetic gradient and neutral line topology from $B_{\text{LOS}}$.
@@ -253,9 +250,7 @@ If this research were extended into a multi-year astrophysical imaging initiativ
 - **Proposed Architecture:**
   Ingest a sequence of 5 consecutive GONG observations spanning a 2-hour window:
 
-  $$
-  \mathbf{V} \in \mathbb{R}^{5 \times 1 \times 2048 \times 2048}
-  $$
+$$V \in R^{5 \times 1 \times 2048 \times 2048}$$
 
   Using a Spatio-Temporal Deformable ConvNet or ConvLSTM:
   - Atmospheric seeing artifacts change rapidly between frames and are filtered out as incoherent temporal noise.
