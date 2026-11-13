@@ -18,25 +18,25 @@ flowchart TD
     classDef postNode fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5;
     classDef calibNode fill:#431407,stroke:#fb923c,stroke-width:2px,color:#fff7ed;
 
-    RawIn["<b>Raw GONG Observation</b><br/>• Shape: [2048 x 2048, 1-ch uint8/uint16]<br/>• Physical: H-alpha 656.28 nm<br/>• Stations: Bh, Ch, Lh, Mh, Th, Uh"]:::ioNode
+    RawIn["<b>Raw GONG Observation</b><br/>• Shape: [2048 x 2048, 1-ch uint8/uint16]<br/>• Bandwidth: H-alpha 656.28 nm<br/>• Stations: Bh, Ch, Lh, Mh, Th, Uh"]:::ioNode
 
-    subgraph C1 ["Component 1: Ingestion, Normalization & Metadata Parsing"]
-        PreProc["<b>Deterministic Normalization</b><br/>• Cast: float32 & Mean/Std z-score<br/>• Replicate: [1, 2048, 2048] &rarr; [3, 2048, 2048]<br/>• Station Meta: Extract site code & seeing tag"]:::stageNode
+    subgraph C1 ["Component 1: Ingestion & Global Robust Quantile Normalization"]
+        PreProc["<b>P2 - P98 Dynamic Range Stretch</b><br/>• Standardizes Cerro Tololo (Ch) sensor gain drop<br/>• Replicate: [1, 2048, 2048] &rarr; [3, 2048, 2048]<br/>• Station Meta: Extract site code & date tag"]:::stageNode
     end
 
     RawIn --> PreProc
 
-    subgraph Offline_Training ["Components 2 & 3: Supervised Training Engine (768 x 768 Native Scale)"]
+    subgraph Offline_Training ["Components 2 & 3: Supervised Training Engine (1024 x 1024 Native Scale)"]
         direction TB
         CropGen["<b>Curvilinear-Guided Patch Sampler</b><br/>• Native Crop: [3, 1024, 1024] (Zero Interpolation)<br/>• Sampling: 70% Foreground / 30% Background<br/>• Batch: 2 imgs x 4 crops = 8 crops/step<br/>• Grad Accum: 2 steps (Effective Batch = 16)"]:::stageNode
         
         AugD4["<b>D4 Dihedral Symmetry Augmentations</b><br/>• Random Flips (p=0.5 H/V) + Rot90 (0, 90, 180, 270 deg)<br/>• Strict Exclusion: No elastic/affine blur"]:::stageNode
         
-        M1_Tr["<b>EfficientNet-B3 UNet</b><br/>• Params: 12.2M<br/>• Loss: Lovasz+Dice+Focal"]:::modelNode
-        M2_Tr["<b>ResNet-34 UNet</b><br/>• Params: 24.4M<br/>• Loss: Lovasz+Dice+Focal"]:::modelNode
-        M3_Tr["<b>ConvNeXt-Tiny+scSE</b><br/>• Params: 33.1M<br/>• Loss: Lovasz+Dice+Focal"]:::modelNode
+        M1_Tr["<b>EfficientNet-B3 UNet</b><br/>• Params: 12.2M | 1024 Receptive Field<br/>• Loss: Lovasz(0.40) + Dice(0.40) + Focal(0.20)"]:::modelNode
+        M2_Tr["<b>ResNet-50 + scSE UNet</b><br/>• Params: 33.8M | Bottleneck Residual<br/>• Loss: Lovasz(0.40) + Dice(0.40) + Focal(0.20)"]:::modelNode
+        M3_Tr["<b>ConvNeXt-Tiny + scSE UNet</b><br/>• Params: 33.1M | 7x7 Depthwise<br/>• Loss: Lovasz(0.40) + Dice(0.40) + Focal(0.20)"]:::modelNode
 
-        PQ_Check["<b>Full 67-Observation PQ Checkpointer</b><br/>• Zero-Latency: 67 observations preloaded in RAM<br/>• Checkpoint Criterion: Maximize Local Validation PQ<br/>• Weights Saved: best.pt, best_resnet50.pt, best_convnext_tiny.pt"]:::lossNode
+        PQ_Check["<b>Full 67-Observation PQ Checkpointer in RAM</b><br/>• Zero-Latency: 67 observations preloaded in RAM<br/>• Checkpoint Criterion: Maximize Local Validation PQ<br/>• Checkpoints: best.pt, best_resnet50.pt, best_convnext_tiny.pt"]:::lossNode
 
         CropGen --> AugD4
         AugD4 --> M1_Tr & M2_Tr & M3_Tr
@@ -45,59 +45,61 @@ flowchart TD
 
     PreProc -. "Training Set (640 Imgs)" .-> CropGen
 
-    subgraph Inference_Engine ["Components 4 & 5: 12-View Zoom TTA & Logit-Space Ensembling"]
+    subgraph Inference_Engine ["Components 4 & 5: 12-View Zoom TTA & Logit-Space Simplex Blending"]
         direction TB
-        TTA_Pyramid["<b>12-View Zoom TTA Generator</b><br/>• Scale 1.000x: [3, 2048, 2048] (4 Flips)<br/>• Scale 1.125x: [3, 2304, 2304] (4 Flips)<br/>• Scale 1.250x: [3, 2560, 2560] (4 Flips)"]:::stageNode
+        TTA_Pyramid["<b>12-View Fine-Spine Zoom TTA Generator</b><br/>• Scale 1.000x: [3, 2048, 2048] (4 Flips)<br/>• Scale 1.125x: [3, 2304, 2304] (4 Flips)<br/>• Scale 1.250x: [3, 2560, 2560] (4 Flips)"]:::stageNode
 
-        M1["<b>Model 1: timm-efficientnet-b3</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Ensemble Weight: w1 = 0.40"]:::modelNode
-        M2["<b>Model 2: resnet34</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Ensemble Weight: w2 = 0.20"]:::modelNode
-        M3["<b>Model 3: tu-convnext_tiny + scSE</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Ensemble Weight: w3 = 0.40"]:::modelNode
+        M1["<b>Model 1: timm-efficientnet-b3</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Simplex Weight: w1 = 0.30"]:::modelNode
+        M2["<b>Model 2: resnet50 + scSE</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Simplex Weight: w2 = 0.25"]:::modelNode
+        M3["<b>Model 3: tu-convnext_tiny + scSE</b><br/>• In: [3, H_s, W_s]<br/>• Out: Logit [1, H_s, W_s]<br/>• Simplex Weight: w3 = 0.45"]:::modelNode
 
-        Unzoom_Fusion["<b>Flip Un-inversion & Resampling</b><br/>• Invert flips &rarr; Bilinear resample to [1, 2048, 2048]<br/>• 36-Pass Weighted Linear Logit Fusion:<br/>  L_ens = 0.40*Z_EffNet + 0.20*Z_ResNet + 0.40*Z_ConvNeXt<br/>• Activation: P_ens = Sigmoid(L_ens) in [0.0, 1.0]"]:::stageNode
+        Unzoom_Fusion["<b>Flip Un-inversion & Resampling</b><br/>• Invert flips &rarr; Bilinear resample to [1, 2048, 2048]<br/>• 36-Pass Weighted Linear Logit Fusion:<br/>  L_ens = 0.30*Z_EffNet + 0.25*Z_ResNet + 0.45*Z_ConvNeXt<br/>• Activation: P_ens = Sigmoid(L_ens) in [0.0, 1.0]"]:::stageNode
 
         TTA_Pyramid --> M1 & M2 & M3
         M1 & M2 & M3 --> Unzoom_Fusion
     end
 
     PreProc -- "Test Stream" --> TTA_Pyramid
-    PQ_Check -. "Deploy Optimal Weights" .-> M1 & M2 & M3
+    PQ_Check -. "Deploy Converged Weights" .-> M1 & M2 & M3
 
-    subgraph Post_Processing ["Component 6: Physics-Informed Morphometric Post-Processing"]
+    subgraph Post_Processing ["Component 6: Physics-Informed Post-Processing Engine"]
         direction TB
-        Binarize["<b>1. Station-Calibrated Thresholding</b><br/>• High-Contrast (Mh, Th, Uh): tau = 0.55<br/>• Seeing-Attenuated (Bh, Ch, Lh): tau = 0.51<br/>• Output: Binary Mask B in {0, 1}^(2048x2048)"]:::postNode
+        Binarize["<b>1. Station-Calibrated Thresholding</b><br/>• Bayesian Optimal Base Threshold: tau* = 0.53<br/>• Normalized Delta: Ch (+0.02), Bh/Lh (+0.01), Mh/Th/Uh (0.00)<br/>• Output: Binary Mask B in {0, 1}^(2048x2048)"]:::postNode
 
-        Dilation_ReMult["<b>2. Curvilinear Grouping & Zero-Bloat Re-Multiplication</b><br/>• Dilation: B_group = dilate(B, Ellipse r=10px)<br/>• Connected Components: C_group = CC8(B_group)<br/>• Strict Zero-Bloat: C_final = C_group * B"]:::postNode
+        Dilation_ReMult["<b>2. Directional Longitudinal Tube Dilation</b><br/>• Orientation: theta = 0.5 * arctan2(2*mu11, mu20 - mu02)<br/>• Elliptical Tube Kernel: 21px longitudinal x 5px transverse<br/>• Dilates along PIL (theta +- 15 deg) with zero lateral expansion"]:::postNode
 
-        TAC_SR["<b>3. TAC-SR v2: Tapering-Aware Spine Recovery</b><br/>• Euclidean Distance Transform: dist(x,y)<br/>• Trigger: median(dist) &le; 2.5px OR p25(dist) &le; 2.0px<br/>• Boundary Recovery Gate: P_ens &ge; 0.35 (thick regions locked)"]:::postNode
+        TAC_SR["<b>3. TAC-SR v2: Tapering-Aware Spine Recovery</b><br/>• Euclidean Distance Transform: dist(x,y)<br/>• Trigger: p25(dist) &le; 2.0px (extremity thinning)<br/>• Recovery Gate: P_ens &ge; 0.30 (Ch) / 0.34 (Bh, Lh) / 0.35 (others)"]:::postNode
 
-        Morph_Filter["<b>4. Deterministic Solar-Physics Morphometric Pruning</b><br/>• Aspect Ratio: AR = max(w,h) / min(w,h)<br/>• Solidity: S = Area / ConvexArea | Core: P90<br/>• Prune If: (S &gt; 0.76 & AR &lt; 1.75 & P90 &lt; 0.62) OR (AR &lt; 1.80 & S &gt; 0.82)"]:::postNode
+        Morph_Filter["<b>4. Solar-Physics Morphometric Pruning</b><br/>• Aspect Ratio: AR = max(w,h) / min(w,h)<br/>• Solidity: S = Area / ConvexArea | Core: P90<br/>• Prune If: (S &gt; 0.70 & AR &lt; 1.70 & P90 &lt; 0.58) OR (AR &lt; 1.80 & S &gt; 0.82)"]:::postNode
 
-        CGB_Module["<b>5. Collinear Tube Gap Bridging (CGB)</b><br/>• Max Gap &le; 35px | Collinearity: |v1 . v2| &ge; 0.906<br/>• Mean Probability along Tube: &ge; 0.15 (Ch relaxed to 0.09)"]:::postNode
+        CGB_Module["<b>5. Collinear Tube Gap Bridging (CGB)</b><br/>• Max Gap &le; 35px | Collinearity: |v1 . v2| &ge; 0.70<br/>• Mean Probability along Tube &ge; 0.11"]:::postNode
 
         Binarize --> Dilation_ReMult --> TAC_SR --> Morph_Filter --> CGB_Module
     end
 
     Unzoom_Fusion --> Binarize
 
-    subgraph Density_Calibration ["Component 7: Two-Pass Ground-Truth Density Calibration"]
+    subgraph Density_Calibration ["Component 7: Learned Reranker & Physical Density Calibration"]
         direction TB
-        Pass1["<b>Pass 1: Per-Frame Outlier Suppression</b><br/>• If Instances &gt; 10 in Frame:<br/>  Prune faint candidates: mean_prob &lt; 0.58 & Area &lt; 650px"]:::calibNode
+        Reranker["<b>5-Fold Out-of-Fold LightGBM Reranker</b><br/>• 9 Physical Features: prob, p90, p99, area, solidity, AR, ecc, dist, site<br/>• Supervised Acceptance Gate: P(TP match) &ge; 0.38<br/>• Dynamically adapts to solar Schwabe cycle activity"]:::calibNode
 
-        Pass2["<b>Pass 2: Global Solar Constant Density Ceiling</b><br/>• Consensus Benchmark Target: 5.50 filaments/image<br/>• Rank all test candidates by mean ensemble probability<br/>• Retain top 990 instances (180 test imgs x 5.5 fil/img)"]:::calibNode
+        Burst_Guard["<b>Single-Frame Noise Burst Guardrail</b><br/>• If Instances &gt; 10 in Frame:<br/>  Prune faint candidates: prob &lt; 0.56 & area &lt; 600px"]:::calibNode
 
-        Pass1 --> Pass2
+        Global_Prior["<b>Global Consensus Density Calibration</b><br/>• Prior Ceiling: ~5.35-5.50 filaments/image (~990 test instances)<br/>• Multi-score ranking: 0.70*P_tp + 0.25*P_pixel + size_bonus"]:::calibNode
+
+        Reranker --> Burst_Guard --> Global_Prior
     end
 
-    CGB_Module --> Pass1
+    CGB_Module --> Reranker
 
     subgraph Submission_Output ["Final Competition Output"]
         direction TB
         RLE_Encoder["<b>COCO UTF-8 RLE Bitmask Encoding</b><br/>• pycocotools mask encoding to UTF-8 string"]:::ioNode
-        SubFile["<b>Final submission.csv</b><br/>• 180 Test Images | ~990 Filaments (~5.5 fil/img)<br/>• Verified Peak Val PQ: 0.4346 | Kaggle Public LB: 0.37"]:::ioNode
+        SubFile["<b>Final submission.csv</b><br/>• 180 Test Images | 1,098 Detected Filaments<br/>• Verified Peak Val PQ: 0.4346 | Kaggle Public LB: 0.37"]:::ioNode
         RLE_Encoder --> SubFile
     end
 
-    Pass2 --> RLE_Encoder
+    Global_Prior --> RLE_Encoder
 ```
 
 ---

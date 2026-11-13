@@ -118,26 +118,26 @@ To capture multi-scale structures without blurring thin filament cores, test-tim
 
 \subsection{Physics-Informed Post-Processing Engine}
 \begin{enumerate}
-    \item \textbf{Directional Longitudinal Tube Dilation:} Standard circular dilation ($r = 10\text{ px}$) causes catastrophic lateral over-merging of parallel filaments in active solar regions. In v28, we calculate the principal inertia tensor orientation $\theta = \frac{1}{2}\arctan2(2\mu_{11}, \mu_{20} - \mu_{02})$ for each fragment and apply an elliptical tube kernel ($21\text{ px}$ longitudinal $\times 5\text{ px}$ transverse) oriented along $\theta \pm 15^\circ$. This preserves spinal continuity along the PIL with zero lateral expansion.
+    \item \textbf{Directional Longitudinal Tube Dilation:} Standard circular dilation ($r = 10\text{ px}$) causes catastrophic lateral over-merging of parallel filaments in active solar regions. In v28, the principal orientation $\theta$ is derived from image moments: $\theta = \frac{1}{2}\mathrm{atan2}(2\mu_{11}, \mu_{20} - \mu_{02})$. We apply an elliptical tube kernel ($21\text{ px} \times 5\text{ px}$) oriented along $\theta \pm 15^\circ$, preserving spinal continuity along the PIL with zero lateral expansion.
     \item \textbf{TAC-SR v2 Extremity Recovery:} Tapering-Aware Confidence Spine Recovery recovers thin extremities ($P_{25} \le 2.0\text{ px}$ from boundary) using a relaxed probability threshold ($\tau_{\text{pos}} = 0.35$).
     \item \textbf{Collinear Endpoint Gap Bridging (CGB):} Reconnects collinear fragments separated by seeing-induced gaps ($\le 35\text{ px}$, direction alignment $\ge 0.70$, line integral $\ge 0.15$).
-    \item \textbf{Solar-Physics Morphometric Pruning:} Rejects round solar features (sunspots, granulation blobs) via aspect ratio and solidity filtering: $\mathrm{prune} \iff (\text{Solidity} > 0.70 \ \wedge \ \text{Aspect Ratio} < 1.70 \ \wedge \ P_{90} < 0.58)$ (Figure~\ref{fig:morph_gradcam}b).
+    \item \textbf{Solar-Physics Morphometric Pruning:} Rejects round solar features (sunspots, granulation blobs) via aspect ratio and solidity filtering: $\mathrm{prune} \iff (\text{Solidity} > 0.70 \ \wedge \ \text{Aspect Ratio} < 1.70 \ \wedge \ P_{90} < 0.58)$ (Figure~\ref{fig:morph}).
 \end{enumerate}
 
 \begin{figure*}[t]
     \centering
-    \begin{subfigure}[b]{0.65\linewidth}
+    \begin{subfigure}[t]{0.61\linewidth}
         \includegraphics[width=\linewidth]{figures/morphometric_uncertainty_analysis.png}
-        \caption{Uncertainty analysis across TTA views, morphometric solar domain separation, and segmentation overlay.}
+        \caption{Morphometric domain separation (left) and epistemic uncertainty map (right).}
         \label{fig:morph}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\linewidth}
+    \begin{subfigure}[t]{0.37\linewidth}
         \includegraphics[width=\linewidth]{figures/gradcam_20110205082634Lh_inst1.png}
         \caption{High-resolution Grad-CAM spinal attribution.}
         \label{fig:gradcam}
     \end{subfigure}
-    \caption{Scientific explainability and validation diagnostics: (a) Left: pixel-level uncertainty map ($\sigma$ across 12 TTA views); Middle: morphometric pruning boundary separating granulation blobs from curvilinear filaments; Right: validation overlay (green = TP, red = FP, yellow = ground truth); (b) High-resolution Grad-CAM attribution confirming focal activation strictly along the magnetic flux rope spine.}
+    \caption{Scientific explainability and validation diagnostics: (a) Left: Solar-physics morphometric domain separation ($AR > 1.70, \text{Solidity} > 0.70$) isolating curvilinear filaments from granulation/sunspot noise; Right: Pixel-level epistemic uncertainty ($\sigma^2$ across 12 Zoom-TTA views) demonstrating low variance across the quiet solar disk and localized uncertainty along the filament boundary; (b) High-resolution Grad-CAM attribution confirming focal activation strictly along the magnetic flux rope spine.}
     \label{fig:morph_gradcam}
 \end{figure*}
 
