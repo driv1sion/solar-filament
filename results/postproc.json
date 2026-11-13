@@ -1,0 +1,1 @@
+{"thr": 0.53, "min_area": 380, "r": 10, "bridge_thr": 0.11, "morph_solidity": 0.7, "morph_ar": 1.7, "morph_p90": 0.5800000000000001, "method": "morphology", "filter_compact": true, "spine_boost": "thickness_aware", "bridge_gaps": true, "morph_ar2": 1.8, "morph_sol2": 0.82, "ens_w1": 0.3, "ens_w2": 0.25, "ens_w3": 0.45, "reranker_threshold": 0.38}

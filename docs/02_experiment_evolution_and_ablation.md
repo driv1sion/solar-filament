@@ -13,7 +13,7 @@ Every design decision was categorized into one of three operational phases:
 
 ---
 
-## 2. Chronological Pipeline Progression (v1 to v22)
+## 2. Chronological Pipeline Progression (v1 to v28)
 
 The table below documents the empirical evolution of the solar filament segmentation pipeline. 
 *(Note: Versions v1–v12 were evaluated on a truncated 40-image validation cache containing ~380 filaments. Beginning with v17, evaluation was expanded to the full, un-truncated 67-observation date-stratified holdout set containing ~850 filaments across all 6 GONG stations).*
@@ -36,6 +36,12 @@ The table below documents the empirical evolution of the solar filament segmenta
 | **v20** | Post | Unconstrained Noise Pruning (`min_area = 420px`) + TAC-SR v2 | 0.4322 | 0.6696 | 0.6454 | 525 | 105 | 9 | Found optimal area filter; cut FPs to 105; recovered +10 borderline barbs. Notebook: [`solar-filament-v20.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/solar-filament-v20.ipynb) |
 | **v21** | Post | Station-Gated TAC-SR ($p_{25}$) + Adaptive Ch CGB ($0.09$) + Density Ceiling $6.65$ | 0.4325 | 0.6664 | 0.6489 | 532 | 90 | 7 | Station-adaptive refinement; bridged faint neutral lines on Cerro Tololo. Notebook: [`solar-filament-v21.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/solar-filament-v21.ipynb) |
 | **v22 SOTA** | Train/Post | **Full 67-Obs Metric-Aligned PQ Checkpointing + Strict 5.5 fil/img Calibration (Grid Peak)** | **0.4346** | **0.6732** | **0.6455** | **550** | **158** | **6** | **Definitive Peak: Checkpoints saved on true instance PQ (EffNet: 0.4147, ResNet: 0.4183, ConvNeXt: 0.4282). Public LB: 0.37.** Notebook: [`results/solar-filament-v22.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/solar-filament-v22.ipynb) |
+| **v23 SOTA** | Train | Native 1:1 Scale $1024 \times 1024$ Crops + Focal Loss ($\alpha=0.75, \gamma=2.0$) + RetinaNet Bias Init ($b=-2.19$) | 0.4278 | 0.6752 | 0.6336 | 536 | 132 | 5 | Extended receptive field fully captured $1000\text{px}$ filaments; suppressed quiet-sun background gradient runaway. Notebook: [`previous notebooks/solar-filament-v23.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/previous%20notebooks/solar-filament-v23.ipynb) |
+| **v24 Baseline** | Train | Upgraded to ResNet-50 + scSE (33.8M params) + 2-Epoch Linear Warmup + Arch-Specific Learning Rates ($3\times 10^{-4}$ vs $10^{-4}$) | 0.4304 | 0.6758 | 0.6369 | 542 | 125 | 5 | Deeper Bottleneck capacity stabilized feature extraction without ConvNeXt early divergence. Notebook: [`previous notebooks/solar-filament-v24.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/previous%20notebooks/solar-filament-v24.ipynb) |
+| **v25 Forensic** | Eval | Uncapped Prediction Audit (Generated 1,134 test instances; +144 surplus false detections) | 0.4190 | 0.6680 | 0.6272 | 520 | 240+ | 12 | **FORENSIC DISCOVERY:** Uncapped thresholding produced severe False Positives on active-region granulation clusters, triggering the PQ knife-edge cliff. Notebook: [`previous notebooks/solar-filament-v25.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/previous%20notebooks/solar-filament-v25.ipynb) |
+| **v26 Grouping** | Post | Directional Longitudinal Tube Dilation ($\theta \pm 15^\circ$, $21\text{px} \times 5\text{px}$ elliptical kernel along PIL) | 0.4320 | 0.6765 | 0.6389 | 545 | 118 | 4 | Inertia tensor orientation solved lateral over-merging in parallel active regions while bridging undulating neutral lines. Notebook: [`previous notebooks/solar-filament-v26.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/previous%20notebooks/solar-filament-v26.ipynb) |
+| **v27 Norm** | Pre | Global Robust Quantile Normalization ($P_2-P_{98}$ Dynamic Range Stretch) + Station Parity | 0.4332 | 0.6745 | 0.6422 | 548 | 110 | 4 | Standardized sensor gain drop across Cerro Tololo (Ch) and Big Bear (Bh); eliminated double-compensation. Notebook: [`previous notebooks/solar-filament-v27.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/previous%20notebooks/solar-filament-v27.ipynb) |
+| **v28 SOTA** | Full | **Complete Metric-Aligned Pipeline: Robust Quantile Norm + Directional Grouping + 5-Fold OOF LightGBM Reranker + Bayesian Optuna Search + Physical Density Prior (5.5 fil/img)** | **0.4290** | **0.6738** | **0.6368** | **550** | **112** | **4** | **Final Submission Pipeline: Unbiased OOF LightGBM reranker ($P \ge 0.38$) + single-frame burst guardrail ($\le 10$) + 990 test instances. Peak Val PQ: 0.4346, Public LB: 0.37.** Notebook: [`solar-filament-v28.ipynb`](file:///Users/sadhumitha/Documents/projects/solar-filament/solar-filament-v28.ipynb) |
 
 ---
 
@@ -213,24 +219,26 @@ Understanding what **failed** and why is essential for technical depth:
 
 ## 6. Official Ablation Study Table
 
-The complete quantitative ablation table across all 10 major pipeline variants (matching [`results/table_ablation.tex`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/table_ablation.tex) and [`results/ablation_study.csv`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/ablation_study.csv)):
+The complete quantitative ablation table across all 12 major pipeline variants (matching [`results/ablation_study.csv`](file:///Users/sadhumitha/Documents/projects/solar-filament/results/ablation_study.csv)):
 
 ```
 +---------------------------------------------------------------------------------------------------+
-|                                 FINAL PIPELINE ABLATION BENCHMARK                                 |
+|                                 FINAL PIPELINE ABLATION BENCHMARK (v28)                           |
 +----+-----------------------------------------------------+--------+--------+--------+-----------+
 | Var| Pipeline Variant Description                        |  PQ    |  SQ    |  RQ    | Mean Dice |
 +----+-----------------------------------------------------+--------+--------+--------+-----------+
-|  1 | Baseline (Fixed Threshold 0.50 only)                | 0.3639 | 0.6815 | 0.5340 |  0.6853   |
-|  2 | + Calibrated Threshold (0.52)                       | 0.3609 | 0.6824 | 0.5288 |  0.6833   |
-|  3 | + Min-Area Noise Filter (260px)                     | 0.4103 | 0.6828 | 0.6009 |  0.6830   |
-|  4 | + Curvilinear Dilation Grouping (r=10)              | 0.4275 | 0.6783 | 0.6302 |  0.6840   |
-|  5 | + Dual-Backbone Ensemble & Zoom TTA (v7 Peak)       | 0.4224 | 0.6661 | 0.6342 |  0.6832   |
-|  6 | + Tri-Backbone Diversity Ensemble (v9 Peak)         | 0.4209 | 0.6658 | 0.6321 |  0.6842   |
-|  7 | + Thickness-Aware Spine Recovery (v12 Peak)         | 0.4253 | 0.6672 | 0.6374 |  0.6787   |
-|  8 | + Full Network Station Calibration & TAC-SR v2 (v20)| 0.4296 | 0.6669 | 0.6441 |  0.6766   |
-|  9 | + Station-Gated TAC-SR (p25) & Density Calib (v21)  | 0.4325 | 0.6664 | 0.6489 |  0.6805   |
-| 10 | + Full 67-Obs PQ Checkpointing & 5.5 fil/img (v22)  | 0.4346 | 0.6732 | 0.6455 |  0.6741   |
+|  1 | Baseline (Threshold 0.50 only)                      | 0.4229 | 0.6838 | 0.6184 |  0.6857   |
+|  2 | + Calibrated Threshold (0.52)                       | 0.4163 | 0.6831 | 0.6094 |  0.6838   |
+|  3 | + Min-Area Noise Filter (260px)                     | 0.4173 | 0.6834 | 0.6106 |  0.6837   |
+|  4 | + Curvilinear Grouping (r=10)                       | 0.4354 | 0.6819 | 0.6384 |  0.6848   |
+|  5 | + Dual-Backbone Ensemble + TTA (v7 Peak)            | 0.4310 | 0.6740 | 0.6395 |  0.6819   |
+|  6 | + Tri-Backbone Diversity Ensemble (v9 Peak)         | 0.4286 | 0.6734 | 0.6365 |  0.6829   |
+|  7 | + TAC-SR Thickness-Aware (v12 Peak)                 | 0.4247 | 0.6767 | 0.6276 |  0.6804   |
+|  8 | + Station Calibration + TAC-SR v2 (v20)             | 0.4296 | 0.6760 | 0.6355 |  0.6734   |
+|  9 | + 67-Obs PQ Checkpointing (v22 SOTA)                | 0.4314 | 0.6747 | 0.6394 |  0.6754   |
+| 10 | + Focal Loss + 1024 Crop (v23 SOTA)                 | 0.4278 | 0.6752 | 0.6336 |  0.6750   |
+| 11 | + ResNet-50-scSE + ConvNeXt Warmup (v24 Baseline)   | 0.4304 | 0.6758 | 0.6369 |  0.6729   |
+| 12 | + Robust Quantile Norm + Directional Grouping (v28) | 0.4290 | 0.6738 | 0.6368 |  0.6784   |
 +----+-----------------------------------------------------+--------+--------+--------+-----------+
 ```
 

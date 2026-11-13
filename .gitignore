@@ -1,2 +1,22 @@
+# Weights
 weights/*.pt
+
+# OS & Environment
+.DS_Store
 *.DS_Store
+
+# Python & Jupyter
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.xdv
+*.fls
+*.fdb_latexmk
+*.synctex.gz

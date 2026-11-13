@@ -4,7 +4,7 @@
 
 ## 1. System Overview & End-to-End Pipeline
 
-The final **v22 SOTA** pipeline combines a pure CNN tri-backbone diversity ensemble (totaling **$69{,}727{,}884$ parameters**) with a physics-informed post-processing and calibration engine. 
+The final **v28 SOTA** pipeline combines a pure CNN tri-backbone diversity ensemble (totaling **$79{,}127{,}884$ parameters**) with a physics-informed post-processing and calibration engine. 
 
 The entire architecture is designed to optimize the non-differentiable **Panoptic Quality (PQ)** metric while operating strictly within Kaggle's free-tier hardware limits (NVIDIA T4 16GB GPU, 13GB CPU RAM).
 
@@ -28,15 +28,15 @@ flowchart TD
 
     subgraph Offline_Training ["Components 2 & 3: Supervised Training Engine (768 x 768 Native Scale)"]
         direction TB
-        CropGen["<b>Curvilinear-Guided Patch Sampler</b><br/>• Native Crop: [3, 768, 768] (Zero Interpolation)<br/>• Sampling: 70% Foreground / 30% Background<br/>• Batch: 2 imgs x 4 crops = 8 crops/step<br/>• Grad Accum: 2 steps (Effective Batch = 16)"]:::stageNode
+        CropGen["<b>Curvilinear-Guided Patch Sampler</b><br/>• Native Crop: [3, 1024, 1024] (Zero Interpolation)<br/>• Sampling: 70% Foreground / 30% Background<br/>• Batch: 2 imgs x 4 crops = 8 crops/step<br/>• Grad Accum: 2 steps (Effective Batch = 16)"]:::stageNode
         
         AugD4["<b>D4 Dihedral Symmetry Augmentations</b><br/>• Random Flips (p=0.5 H/V) + Rot90 (0, 90, 180, 270 deg)<br/>• Strict Exclusion: No elastic/affine blur"]:::stageNode
         
-        M1_Tr["<b>EfficientNet-B3 UNet</b><br/>• Params: 12.2M<br/>• Loss: Lovasz+Dice+BCE"]:::modelNode
-        M2_Tr["<b>ResNet-34 UNet</b><br/>• Params: 24.4M<br/>• Loss: Lovasz+Dice+BCE"]:::modelNode
-        M3_Tr["<b>ConvNeXt-Tiny+scSE</b><br/>• Params: 33.1M<br/>• Loss: Lovasz+Dice+BCE"]:::modelNode
+        M1_Tr["<b>EfficientNet-B3 UNet</b><br/>• Params: 12.2M<br/>• Loss: Lovasz+Dice+Focal"]:::modelNode
+        M2_Tr["<b>ResNet-34 UNet</b><br/>• Params: 24.4M<br/>• Loss: Lovasz+Dice+Focal"]:::modelNode
+        M3_Tr["<b>ConvNeXt-Tiny+scSE</b><br/>• Params: 33.1M<br/>• Loss: Lovasz+Dice+Focal"]:::modelNode
 
-        PQ_Check["<b>Full 67-Observation PQ Checkpointer</b><br/>• Zero-Latency: 67 observations preloaded in RAM<br/>• Checkpoint Criterion: Maximize Local Validation PQ<br/>• Weights Saved: best.pt, best_resnet34.pt, best_convnext_tiny.pt"]:::lossNode
+        PQ_Check["<b>Full 67-Observation PQ Checkpointer</b><br/>• Zero-Latency: 67 observations preloaded in RAM<br/>• Checkpoint Criterion: Maximize Local Validation PQ<br/>• Weights Saved: best.pt, best_resnet50.pt, best_convnext_tiny.pt"]:::lossNode
 
         CropGen --> AugD4
         AugD4 --> M1_Tr & M2_Tr & M3_Tr
@@ -645,7 +645,7 @@ Filament flux ropes frequently exhibit small photometric gaps due to localized D
 
 ---
 
-## 8. Component 7: Two-Pass Outlier-Aware Physical Density Calibration
+## 8. Component 7: Learned 2nd-Stage LightGBM Reranker & Physical Density Calibration
 
 The average ground-truth filament density across all expert GONG annotations in MAGFiLO is strictly **$\sim 5.5\text{ filaments per image}$** (~990 instances across 180 test images).
 
